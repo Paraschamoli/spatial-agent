@@ -1,0 +1,178 @@
+[project]
+name = "spatial-agent"
+version = "0.0.1"
+description = "A Bindu AI agent for spatial transcriptomics analysis"
+authors = [{ name = "Paras Chamoli", email = "paras@getbindu.com" }]
+readme = "README.md"
+keywords = ['python', 'spatial-transcriptomics', 'bioinformatics', 'ai']
+requires-python = ">=3.12"
+dependencies = [
+    "bindu==2026.9.4",
+    "langchain>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "langchain-anthropic>=0.3.0",
+    "langchain-google-genai>=2.0.0",
+    "requests>=2.31.0",
+    "pyperclip>=1.8.0",
+    "rich>=13.0.0",
+    "openai>=2.11.0",
+    "anthropic>=0.34.0",
+    "google-generativeai>=0.8.0",
+    "sqlalchemy>=2.0.44",
+    "ddgs>=9.9.3",
+    # Spatial transcriptomics dependencies
+    "scanpy>=1.10,<2.0",
+    "anndata>=0.11",
+    "pandas>=2.2,<3.0",
+    "numpy>=2.3.5",
+    "scipy>=1.14,<2.0",
+    "scikit-learn>=1.5,<2.0",
+    "matplotlib>=3.9,<4.0",
+    "seaborn>=0.13,<0.14",
+    
+    # Spatial analysis specific (basic packages that work)
+    # "squidpy>=1.5.0",  # May have Windows build issues
+    # "tangram-sc>=1.0.4",  # May have conflicts
+    # "harmonypy>=0.0.9",  # May have Windows build issues
+    # "bbknn>=1.6.0",  # May have Windows build issues
+    
+    # Spatial deconvolution (basic packages)
+    # "scvi-tools>=1.4.0",  # May have conflicts
+    # "cell2location>=0.1.5",  # May have conflicts
+    
+    # Cell-cell communication (basic packages)
+    # "cellphonedb>=5.0.0",  # May have conflicts
+    # "liana>=1.6.0",  # May have conflicts
+    
+    # Spatial domain detection (basic packages)
+    # "SpaGCN>=1.2.7",  # May have conflicts
+    # "GraphST>=1.1.1",  # May have conflicts
+    # "POT>=0.9.0",  # May have conflicts
+    # "leidenalg<0.11",  # May have conflicts
+    
+    # UTAG dependencies (basic packages)
+    # "networkx",  # Already included in other deps
+    # "parc",  # May have conflicts
+    # "parmap",  # May have conflicts
+    # "tqdm",  # Already included in other deps
+    
+    # Trajectory inference (commented out due to conflicts with bindu)
+    # "scvelo>=0.3.0",
+    # "cellrank>=2.0.0",
+    
+    # Multimodal integration (commented out due to potential conflicts)
+    # "mofapy2>=0.7.0",
+    
+    # Database and literature tools
+    "biopython>=1.84",
+    "pymed>=0.8.9",
+    "gget>=0.28.0",
+    
+    # Embeddings for tool retrieval
+    "sentence-transformers>=3.0,<4.0",
+    
+    # Visualization and utilities
+    "pydantic>=2.8,<3.0",
+    "python-dotenv>=1.0.0",
+]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://Paraschamoli.github.io/spatial-agent/"
+Repository = "https://github.com/Paraschamoli/spatial-agent"
+Documentation = "https://Paraschamoli.github.io/spatial-agent/"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.2.0",
+    "pytest-asyncio>=0.23.0",
+    "pre-commit>=2.20.0",
+    "tox-uv>=1.11.3",
+    "ty>=0.0.1a16",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.11.5",
+    "mkdocs>=1.4.2",
+    "mkdocs-material>=8.5.10",
+    "mkdocstrings[python]>=0.26.1",
+    "types-requests>=2.31.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["spatial_agent"]
+
+[tool.ty.environment]
+python = "./.venv"
+python-version = "3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+fix = true
+
+[tool.ruff.lint]
+select = [
+    # flake8-2020
+    "YTT",
+    # flake8-bandit
+    "S",
+    # flake8-bugbear
+    "B",
+    # flake8-builtins
+    "A",
+    # flake8-comprehensions
+    "C4",
+    # flake8-debugger
+    "T10",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+    # mccabe
+    "C90",
+    # pycodestyle
+    "E", "W",
+    # pyflakes
+    "F",
+    # pygrep-hooks
+    "PGH",
+    # pyupgrade
+    "UP",
+    # ruff
+    "RUF",
+    # tryceratops
+    "TRY",
+]
+ignore = [
+    # LineTooLong
+    "E501",
+    # DoNotAssignLambda
+    "E731",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.ruff.format]
+preview = true
+
+[tool.coverage.report]
+skip_empty = true
+
+[tool.coverage.run]
+branch = true
+source = ["spatial_agent"]
