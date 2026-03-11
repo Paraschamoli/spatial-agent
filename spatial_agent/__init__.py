@@ -7,8 +7,7 @@
 #
 #  Thank you users! We ❤️ you! - 🌻
 
-"""spatial-agent - An Bindu Agent.
-"""
+"""spatial-agent - An Bindu Agent."""
 
 from spatial_agent.__version__ import __version__
 from spatial_agent.main import (

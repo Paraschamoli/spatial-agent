@@ -7,20 +7,21 @@ supporting both bash command hooks and prompt-based (LLM) hooks.
 Configuration is loaded from .spatialagent/settings.json
 """
 
-import os
 import json
-import subprocess
 import logging
+import os
 import re
-from typing import Dict, Any, List, Optional, Literal
+import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
 
 class HookEvent(str, Enum):
     """Supported hook events throughout the agent lifecycle."""
+
     # Agent lifecycle
     START = "Start"
     STOP = "Stop"
@@ -47,10 +48,11 @@ class HookEvent(str, Enum):
 @dataclass
 class HookResult:
     """Result from executing a hook."""
+
     decision: Literal["approve", "block"] = "approve"
     reason: str = ""
     output: str = ""
-    modified_args: Dict[str, Any] = field(default_factory=dict)
+    modified_args: dict[str, Any] = field(default_factory=dict)
 
     @property
     def approved(self) -> bool:
@@ -64,11 +66,12 @@ class HookResult:
 @dataclass
 class HookDefinition:
     """Definition of a single hook."""
+
     type: Literal["bash", "prompt"]
-    command: Optional[str] = None  # For bash hooks
-    prompt: Optional[str] = None   # For prompt hooks
+    command: str | None = None  # For bash hooks
+    prompt: str | None = None  # For prompt hooks
     timeout: int = 30
-    matcher: Optional[Dict[str, Any]] = None  # Conditions for when hook applies
+    matcher: dict[str, Any] | None = None  # Conditions for when hook applies
 
 
 class HooksManager:
@@ -108,7 +111,7 @@ class HooksManager:
             llm: LLM instance for prompt-based hooks
         """
         self.llm = llm
-        self.hooks: Dict[str, List[HookDefinition]] = {}
+        self.hooks: dict[str, list[HookDefinition]] = {}
         self.enabled = True
 
         # Load configuration
@@ -126,7 +129,7 @@ class HooksManager:
             return
 
         try:
-            with open(config_file, 'r') as f:
+            with open(config_file) as f:
                 config = json.load(f)
 
             hooks_config = config.get("hooks", {})
@@ -158,7 +161,7 @@ class HooksManager:
             logger.error(f"Error loading hooks config: {e}")
             self.enabled = False
 
-    def _parse_hook(self, hook_def: Dict, parent_matcher: Optional[Dict] = None) -> HookDefinition:
+    def _parse_hook(self, hook_def: dict, parent_matcher: dict | None = None) -> HookDefinition:
         """Parse a hook definition from config."""
         matcher = hook_def.get("matcher", parent_matcher)
         return HookDefinition(
@@ -166,14 +169,14 @@ class HooksManager:
             command=hook_def.get("command"),
             prompt=hook_def.get("prompt"),
             timeout=hook_def.get("timeout", 30),
-            matcher=matcher
+            matcher=matcher,
         )
 
     def set_llm(self, llm):
         """Set LLM for prompt-based hooks."""
         self.llm = llm
 
-    def _matches(self, hook: HookDefinition, context: Dict[str, Any]) -> bool:
+    def _matches(self, hook: HookDefinition, context: dict[str, Any]) -> bool:
         """Check if hook matcher conditions are satisfied."""
         if not hook.matcher:
             return True
@@ -192,7 +195,7 @@ class HooksManager:
 
         return True
 
-    def _substitute_variables(self, template: str, context: Dict[str, Any]) -> str:
+    def _substitute_variables(self, template: str, context: dict[str, Any]) -> str:
         """Substitute $VARIABLE placeholders in template with context values."""
         result = template
 
@@ -208,7 +211,7 @@ class HooksManager:
 
         return result
 
-    def _execute_bash_hook(self, hook: HookDefinition, context: Dict[str, Any]) -> HookResult:
+    def _execute_bash_hook(self, hook: HookDefinition, context: dict[str, Any]) -> HookResult:
         """Execute a bash command hook."""
         if not hook.command:
             return HookResult(decision="approve", reason="No command specified")
@@ -221,14 +224,7 @@ class HooksManager:
             for key, value in context.items():
                 env[key.upper()] = str(value)
 
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=hook.timeout,
-                env=env
-            )
+            result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=hook.timeout, env=env)
 
             output = result.stdout + result.stderr
 
@@ -240,7 +236,7 @@ class HooksManager:
                     return HookResult(
                         decision=decision_json.get("decision", "approve"),
                         reason=decision_json.get("reason", ""),
-                        output=output
+                        output=output,
                     )
             except json.JSONDecodeError:
                 pass
@@ -250,21 +246,16 @@ class HooksManager:
                 return HookResult(decision="approve", output=output)
             else:
                 return HookResult(
-                    decision="block",
-                    reason=f"Command exited with code {result.returncode}",
-                    output=output
+                    decision="block", reason=f"Command exited with code {result.returncode}", output=output
                 )
 
         except subprocess.TimeoutExpired:
-            return HookResult(
-                decision="block",
-                reason=f"Hook timed out after {hook.timeout}s"
-            )
+            return HookResult(decision="block", reason=f"Hook timed out after {hook.timeout}s")
         except Exception as e:
             logger.error(f"Bash hook error: {e}")
             return HookResult(decision="approve", reason=f"Hook error: {e}")
 
-    def _execute_prompt_hook(self, hook: HookDefinition, context: Dict[str, Any]) -> HookResult:
+    def _execute_prompt_hook(self, hook: HookDefinition, context: dict[str, Any]) -> HookResult:
         """Execute a prompt-based (LLM) hook."""
         if not self.llm:
             logger.warning("Prompt hook requested but no LLM configured")
@@ -291,7 +282,7 @@ class HooksManager:
                         decision=decision_json.get("decision", "approve"),
                         reason=decision_json.get("reason", ""),
                         output=output,
-                        modified_args=decision_json.get("modified_args", {})
+                        modified_args=decision_json.get("modified_args", {}),
                     )
             except json.JSONDecodeError:
                 pass
@@ -307,7 +298,7 @@ class HooksManager:
             logger.error(f"Prompt hook error: {e}")
             return HookResult(decision="approve", reason=f"Hook error: {e}")
 
-    def execute(self, event: HookEvent, context: Dict[str, Any]) -> HookResult:
+    def execute(self, event: HookEvent, context: dict[str, Any]) -> HookResult:
         """
         Execute all hooks for a given event.
 
@@ -353,17 +344,10 @@ class HooksManager:
             if result.blocked:
                 logger.info(f"Hook blocked {event_name}: {result.reason}")
                 return HookResult(
-                    decision="block",
-                    reason=result.reason,
-                    output="\n".join(all_outputs),
-                    modified_args=modified_args
+                    decision="block", reason=result.reason, output="\n".join(all_outputs), modified_args=modified_args
                 )
 
-        return HookResult(
-            decision="approve",
-            output="\n".join(all_outputs),
-            modified_args=modified_args
-        )
+        return HookResult(decision="approve", output="\n".join(all_outputs), modified_args=modified_args)
 
     def has_hooks(self, event: HookEvent) -> bool:
         """Check if any hooks are registered for an event."""
@@ -372,7 +356,7 @@ class HooksManager:
 
 
 # Global hooks manager instance (can be configured at startup)
-_hooks_manager: Optional[HooksManager] = None
+_hooks_manager: HooksManager | None = None
 
 
 def get_hooks_manager() -> HooksManager:

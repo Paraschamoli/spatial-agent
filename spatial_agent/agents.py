@@ -38,7 +38,7 @@ class SpatialAnalysisAgent:
         """Create role-specific prompt template."""
         templates = {
             "Annotation Specialist": """
-                You are a spatial transcriptomics annotation specialist. 
+                You are a spatial transcriptomics annotation specialist.
                 You will receive a description of spatial transcriptomics data.
                 Task: Analyze the data description and provide guidance on cell type annotation strategies.
                 Focus: Identify appropriate reference datasets, annotation methods, and quality control measures.
@@ -86,11 +86,7 @@ class MultidisciplinarySpatialTeam:
     """Agent that synthesizes reports from multiple spatial analysis specialists."""
 
     def __init__(
-        self, 
-        annotation_report: str, 
-        communication_report: str, 
-        domain_report: str, 
-        model_name: str = "gpt-4o"
+        self, annotation_report: str, communication_report: str, domain_report: str, model_name: str = "gpt-4o"
     ):
         """Initialize multidisciplinary team with specialist reports."""
         self.annotation_report = annotation_report
@@ -200,7 +196,3 @@ async def run_spatial_analysis(data_description: str, model_name: str = "gpt-4o"
     # Run the team and get final analysis plan
     final_plan = await team.run()
     return final_plan
-
-
-
-

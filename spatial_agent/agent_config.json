@@ -1,39 +1,39 @@
 {
-    "author": "paras@getbindu.com",
-    "name": "spatial-agent",
-    "description": "A Bindu AI agent for spatial transcriptomics analysis",
-    "version": "1.0.0",
-    "recreate_keys": false,
-    
-    "skills": [
-        "skills/spatial"
+  "author": "paras@getbindu.com",
+  "name": "spatial-agent",
+  "description": "A Bindu AI agent for spatial transcriptomics analysis",
+  "version": "1.0.0",
+  "recreate_keys": false,
+  "skills": [
+    "skills/spatial"
+  ],
+  "capabilities": {},
+  "agent_trust": "low",
+  "debug_mode": true,
+  "debug_level": 2,
+  "deployment": {
+    "url": "http://0.0.0.0:3773",
+    "expose": true,
+    "protocol_version": "1.0.0",
+    "proxy_urls": [
+      "0.0.0.0"
     ],
-    
-    "capabilities": {},
-    
-    "agent_trust": "low",
-    "debug_mode": true,
-    "debug_level": 2,
-    
-    "deployment": {
-        "url": "http://0.0.0.0:3773",
-        "expose": true,
-        "protocol_version": "1.0.0",
-        "proxy_urls": ["0.0.0.0"],
-        "cors_origins": ["*"]
-    },
-    "num_history_sessions": 5,
-    "environment_variables": [
-      {
-        "key": "OPENROUTER_API_KEY",
-        "description": "OpenRouter API key for all models",
-        "required": true
-      },
-      {
-        "key": "MODEL_NAME",
-        "description": "Model name to use (default: claude-sonnet-4-5-20250929)",
-        "required": false,
-        "default": "claude-sonnet-4-5-20250929"
-      }
+    "cors_origins": [
+      "*"
     ]
-  }
+  },
+  "num_history_sessions": 5,
+  "environment_variables": [
+    {
+      "key": "OPENROUTER_API_KEY",
+      "description": "OpenRouter API key for all models",
+      "required": true
+    },
+    {
+      "key": "MODEL_NAME",
+      "description": "Model name to use (default: claude-sonnet-4-5-20250929)",
+      "required": false,
+      "default": "claude-sonnet-4-5-20250929"
+    }
+  ]
+}

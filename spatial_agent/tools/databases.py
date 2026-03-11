@@ -9,30 +9,38 @@ All tools are standalone functions following Biomni pattern.
 
 # Lightweight imports - keep at module level
 import os
-import pandas as pd
-import numpy as np
-from typing import Annotated, Literal
 from os.path import exists
-from sklearn.metrics.pairwise import cosine_similarity
+from typing import Annotated, Literal
 
+import numpy as np
+import pandas as pd
 from langchain_core.tools import tool
 from pydantic import Field
+from sklearn.metrics.pairwise import cosine_similarity
 
-from .utils import find_most_similar, _embed_with_retry, _get_cache_key, _load_cached_embeddings, _save_cached_embeddings
-
+from .utils import (
+    _embed_with_retry,
+    _get_cache_key,
+    _load_cached_embeddings,
+    _save_cached_embeddings,
+    find_most_similar,
+)
 
 # Module-level config (set via configure_database_tools)
 _config = {
     "data_path": "./data",
 }
 
+
 def configure_database_tools(data_path: str = "./data"):
     """Configure paths for database tools. Call this before using the tools."""
     _config["data_path"] = data_path
 
+
 def get_data_path() -> str:
     """Get the configured data path."""
     return _config["data_path"]
+
 
 # NOTE: text-embedding-3-small outperforms local models (pubmedbert, bge-large) for
 # database cell type matching. Benchmark (2025-12-30) showed:
@@ -47,13 +55,19 @@ DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 # Tool 1: PanglaoDB Search
 # =============================================================================
 
+
 @tool
 def search_panglao(
-    cell_types: Annotated[str, Field(description="Cell types to search - either comma-separated list (e.g., 'T cell, B cell, macrophage') or path to CSV file with 'cell_type' column")],
+    cell_types: Annotated[
+        str,
+        Field(
+            description="Cell types to search - either comma-separated list (e.g., 'T cell, B cell, macrophage') or path to CSV file with 'cell_type' column"
+        ),
+    ],
     organism: Annotated[Literal["Hs", "Mm"], Field(description="Species: Hs (human) or Mm (mouse)")],
     tissue: Annotated[str, Field(description="Target tissue context (e.g., brain, liver, pancreas)")],
-    save_path: Annotated[str, Field(description="Directory to save results (optional)")] = None,
-    iter_round: Annotated[int, Field(ge=1, le=3, description="Iteration round for panel design (1-3)")] = None,
+    save_path: Annotated[str, Field(description="Directory to save results (optional)")] | None = None,
+    iter_round: Annotated[int, Field(ge=1, le=3, description="Iteration round for panel design (1-3)")] | None = None,
 ) -> str:
     """Search PanglaoDB for marker genes of given cell types.
 
@@ -74,7 +88,7 @@ def search_panglao(
 
             Saved to: /path/to/pangdb_celltype_1.csv
     """
-    from ..agent import make_llm_emb, get_effective_embedding_model
+    from ..agent import get_effective_embedding_model, make_llm_emb
 
     # Get the actual embedding model that will be used (may be overridden by env vars)
     effective_model = get_effective_embedding_model(DEFAULT_EMBEDDING_MODEL)
@@ -84,13 +98,13 @@ def search_panglao(
     llm_embed_doc = make_llm_emb(DEFAULT_EMBEDDING_MODEL, input_type="search_document")
 
     # Parse cell_types input - either CSV path or comma-separated list
-    if cell_types.endswith('.csv') and os.path.exists(cell_types):
+    if cell_types.endswith(".csv") and os.path.exists(cell_types):
         df_input = pd.read_csv(cell_types).astype(str)
-        if 'cell_type' not in df_input.columns:
+        if "cell_type" not in df_input.columns:
             return f"ERROR: CSV file must have 'cell_type' column. Found columns: {list(df_input.columns)}"
-        cell_type_list = df_input['cell_type'].unique().tolist()
+        cell_type_list = df_input["cell_type"].unique().tolist()
     else:
-        cell_type_list = [ct.strip() for ct in cell_types.split(',')]
+        cell_type_list = [ct.strip() for ct in cell_types.split(",")]
 
     if not cell_type_list:
         return "ERROR: No cell types provided"
@@ -102,30 +116,32 @@ def search_panglao(
 
     # Create semantic descriptions for matching
     query_descriptions = [f"{organism}; {ct}; {tissue}" for ct in cell_type_list]
-    df_panglao["description_all"] = (
-        df_panglao[["species", "cell type", "organ"]].astype(str).agg("; ".join, axis=1)
-    )
+    df_panglao["description_all"] = df_panglao[["species", "cell type", "organ"]].astype(str).agg("; ".join, axis=1)
     db_descriptions = list(df_panglao["description_all"].unique())
 
     # Match using embeddings with correct input_type
     # Use effective_model for cache key to handle env var overrides (e.g., USE_LOCAL_EMBEDDINGS)
     matched = find_most_similar(
-        llm_embed_query, query_descriptions, db_descriptions,
+        llm_embed_query,
+        query_descriptions,
+        db_descriptions,
         llm_emb_doc=llm_embed_doc,
         database=f"panglao_{organism}",
-        embedding_model=effective_model
+        embedding_model=effective_model,
     )
 
     # Extract marker genes (filter out nan values and duplicates)
     # Use column names expected by score_gene_importance tool
     res = {"cell_type": [], "cell_type_pangdb": [], "marker_genes": []}
-    for cell_type, query_desc, panglao_match in zip(cell_type_list, query_descriptions, matched):
+    for cell_type, query_desc, panglao_match in zip(cell_type_list, query_descriptions, matched, strict=False):
         res["cell_type"].append(cell_type)
         res["cell_type_pangdb"].append(panglao_match.split(";")[1].strip())
-        markers = df_panglao.loc[
-            df_panglao["description_all"] == panglao_match,
-            "official gene symbol"
-        ].dropna().unique().tolist()
+        markers = (
+            df_panglao.loc[df_panglao["description_all"] == panglao_match, "official gene symbol"]
+            .dropna()
+            .unique()
+            .tolist()
+        )
         res["marker_genes"].append(markers)
 
     # Save if path provided
@@ -142,7 +158,7 @@ def search_panglao(
     # Build clear output showing marker genes for each cell type
     output_lines = [f"PanglaoDB Results ({organism}, {tissue}):"]
     for _, row in df_result.iterrows():
-        genes = row['marker_genes']
+        genes = row["marker_genes"]
         n_genes = len(genes) if isinstance(genes, list) else 0
         output_lines.append(f"\n{row['cell_type']} (matched: {row['cell_type_pangdb']}):")
         output_lines.append(f"  Marker genes ({n_genes}): {genes}")
@@ -159,12 +175,25 @@ def search_panglao(
 # Tool 2: CZI Dataset Retrieval
 # =============================================================================
 
+
 @tool
 def search_czi_datasets(
-    query: Annotated[str, Field(description="Query describing tissue, condition, and organism (e.g., 'liver, breast cancer, Homo sapiens')")],
+    query: Annotated[
+        str,
+        Field(
+            description="Query describing tissue, condition, and organism (e.g., 'liver, breast cancer, Homo sapiens')"
+        ),
+    ],
     n_datasets: Annotated[int, Field(description="Number of top datasets to return")] = 1,
-    organism: Annotated[str, Field(description="Filter by organism (e.g., 'Mus musculus', 'Homo sapiens'). Optional.")] = None,
-    tissue: Annotated[str, Field(description="Filter by tissue keyword (e.g., 'lung', 'brain'). Matches against tissue and tissue_general columns. Optional.")] = None,
+    organism: Annotated[str, Field(description="Filter by organism (e.g., 'Mus musculus', 'Homo sapiens'). Optional.")]
+    | None = None,
+    tissue: Annotated[
+        str,
+        Field(
+            description="Filter by tissue keyword (e.g., 'lung', 'brain'). Matches against tissue and tissue_general columns. Optional."
+        ),
+    ]
+    | None = None,
 ) -> str:
     """Search CZI CELLxGENE Census for reference single-cell datasets.
 
@@ -189,7 +218,7 @@ def search_czi_datasets(
                     dataset_id = line.split('dataset_id:')[1].strip()
                     break
     """
-    from ..agent import make_llm_emb, get_effective_embedding_model
+    from ..agent import get_effective_embedding_model, make_llm_emb
 
     # Get the actual embedding model that will be used (may be overridden by env vars)
     effective_model = get_effective_embedding_model(DEFAULT_EMBEDDING_MODEL)
@@ -215,10 +244,9 @@ def search_czi_datasets(
 
     if tissue:
         tissue_lower = tissue.lower()
-        mask = (
-            df["tissue"].str.lower().str.contains(tissue_lower, na=False) |
-            df["tissue_general"].str.lower().str.contains(tissue_lower, na=False)
-        )
+        mask = df["tissue"].str.lower().str.contains(tissue_lower, na=False) | df[
+            "tissue_general"
+        ].str.lower().str.contains(tissue_lower, na=False)
         df_filtered = df[mask]
         if len(df_filtered) >= n_datasets:
             df = df_filtered
@@ -227,10 +255,13 @@ def search_czi_datasets(
 
     # Create descriptions for each dataset
     df["description"] = (
-        df["organism"].astype(str) + "; " +
-        df["tissue"].astype(str) + "; " +
-        df["disease"].astype(str) + "; " +
-        df["dataset_title"].astype(str)
+        df["organism"].astype(str)
+        + "; "
+        + df["tissue"].astype(str)
+        + "; "
+        + df["disease"].astype(str)
+        + "; "
+        + df["dataset_title"].astype(str)
     )
 
     descriptions = df["description"].tolist()
@@ -283,13 +314,19 @@ def search_czi_datasets(
 # Tool 3: CellMarker2 Search
 # =============================================================================
 
+
 @tool
 def search_cellmarker2(
-    cell_types: Annotated[str, Field(description="Cell types to search - either comma-separated list (e.g., 'hepatocyte, Kupffer cell') or path to CSV file with 'cell_type' column")],
+    cell_types: Annotated[
+        str,
+        Field(
+            description="Cell types to search - either comma-separated list (e.g., 'hepatocyte, Kupffer cell') or path to CSV file with 'cell_type' column"
+        ),
+    ],
     organism: Annotated[str, Field(description="Organism: Human or Mouse")],
     tissue: Annotated[str, Field(description="Target tissue context (e.g., liver, brain)")],
-    save_path: Annotated[str, Field(description="Directory to save results (optional)")] = None,
-    iter_round: Annotated[int, Field(ge=1, le=3, description="Iteration round for panel design (1-3)")] = None,
+    save_path: Annotated[str, Field(description="Directory to save results (optional)")] | None = None,
+    iter_round: Annotated[int, Field(ge=1, le=3, description="Iteration round for panel design (1-3)")] | None = None,
 ) -> str:
     """Search CellMarker2 database for marker genes of given cell types.
 
@@ -310,7 +347,7 @@ def search_cellmarker2(
 
             Saved to: /path/to/cellmarker_celltype_1.csv
     """
-    from ..agent import make_llm_emb, get_effective_embedding_model
+    from ..agent import get_effective_embedding_model, make_llm_emb
 
     # Get the actual embedding model that will be used (may be overridden by env vars)
     effective_model = get_effective_embedding_model(DEFAULT_EMBEDDING_MODEL)
@@ -320,13 +357,13 @@ def search_cellmarker2(
     llm_embed_doc = make_llm_emb(DEFAULT_EMBEDDING_MODEL, input_type="search_document")
 
     # Parse cell_types input - either CSV path or comma-separated list
-    if cell_types.endswith('.csv') and os.path.exists(cell_types):
+    if cell_types.endswith(".csv") and os.path.exists(cell_types):
         df_input = pd.read_csv(cell_types).astype(str)
-        if 'cell_type' not in df_input.columns:
+        if "cell_type" not in df_input.columns:
             return f"ERROR: CSV file must have 'cell_type' column. Found columns: {list(df_input.columns)}"
-        cell_type_list = df_input['cell_type'].unique().tolist()
+        cell_type_list = df_input["cell_type"].unique().tolist()
     else:
-        cell_type_list = [ct.strip() for ct in cell_types.split(',')]
+        cell_type_list = [ct.strip() for ct in cell_types.split(",")]
 
     if not cell_type_list:
         return "ERROR: No cell types provided"
@@ -348,23 +385,25 @@ def search_cellmarker2(
     # Match using embeddings with correct input_type
     # Use effective_model for cache key to handle env var overrides (e.g., USE_LOCAL_EMBEDDINGS)
     matched = find_most_similar(
-        llm_embed_query, query_descriptions, db_descriptions,
+        llm_embed_query,
+        query_descriptions,
+        db_descriptions,
         llm_emb_doc=llm_embed_doc,
         database=f"cellmarker2_{organism}",
-        embedding_model=effective_model
+        embedding_model=effective_model,
     )
 
     # Extract markers (filter out nan values and duplicates)
     # Use column names expected by score_gene_importance tool
     res = {"cell_type": [], "cell_type_cellmarker": [], "marker_genes": []}
-    for cell_type, query_desc, cm2_match in zip(cell_type_list, query_descriptions, matched):
+    for cell_type, query_desc, cm2_match in zip(cell_type_list, query_descriptions, matched, strict=False):
         res["cell_type"].append(cell_type)
         res["cell_type_cellmarker"].append(cm2_match.split(";")[2].strip())
-        markers = df_cellmarker2.loc[
-            df_cellmarker2["description_all"] == cm2_match, "Symbol"
-        ].dropna().unique().tolist()
+        markers = (
+            df_cellmarker2.loc[df_cellmarker2["description_all"] == cm2_match, "Symbol"].dropna().unique().tolist()
+        )
         # Filter out 'nan' strings as well (from .astype(str) conversion)
-        markers = [m for m in markers if m.lower() != 'nan']
+        markers = [m for m in markers if m.lower() != "nan"]
         res["marker_genes"].append(markers)
 
     # Save if path provided
@@ -381,7 +420,7 @@ def search_cellmarker2(
     # Build clear output showing marker genes for each cell type
     output_lines = [f"CellMarker2 Results ({organism}, {tissue}):"]
     for _, row in df_result.iterrows():
-        genes = row['marker_genes']
+        genes = row["marker_genes"]
         n_genes = len(genes) if isinstance(genes, list) else 0
         output_lines.append(f"\n{row['cell_type']} (matched: {row['cell_type_cellmarker']}):")
         output_lines.append(f"  Marker genes ({n_genes}): {genes}")
@@ -398,12 +437,15 @@ def search_cellmarker2(
 # Tool 4: CZI Data Reader
 # =============================================================================
 
+
 @tool
 def extract_czi_markers(
     save_path: Annotated[str, Field(description="Experiment directory")],
     dataset_id: Annotated[str, Field(description="CZI dataset ID or comma-separated list")],
     iter_round: Annotated[int, Field(ge=1, le=3, description="Iteration round (1-3)")],
-    organism: Annotated[Literal["Homo sapiens", "Mus musculus"], Field(description="Organism species")] = "Mus musculus",
+    organism: Annotated[
+        Literal["Homo sapiens", "Mus musculus"], Field(description="Organism species")
+    ] = "Mus musculus",
 ) -> str:
     """Read and process CZI database reference datasets to extract cell types and marker genes.
 
@@ -425,7 +467,7 @@ def extract_czi_markers(
     import requests
 
     CELL_GUIDE_BASE_URI = "https://cellguide.cellxgene.cziscience.com"
-    LATEST_SNAPSHOT = requests.get(f"{CELL_GUIDE_BASE_URI}/latest_snapshot_identifier").text.replace('\n', '')
+    LATEST_SNAPSHOT = requests.get(f"{CELL_GUIDE_BASE_URI}/latest_snapshot_identifier").text.replace("\n", "")
 
     def get_cellguide_file(relpth, snapshot=LATEST_SNAPSHOT):
         req = requests.get(f"{CELL_GUIDE_BASE_URI}/{snapshot}/{relpth}")
@@ -491,9 +533,13 @@ def extract_czi_markers(
                     comp_markers_df = pd.DataFrame.from_records(comp_markers.json())
                     # Gene symbol is in 'symbol' column, not 'marker_gene'
                     if "symbol" in comp_markers_df.columns:
-                        comp_genes = [normalize_gene_symbol(g) for g in comp_markers_df["symbol"].tolist()[:MAX_MARKER_GENES]]
+                        comp_genes = [
+                            normalize_gene_symbol(g) for g in comp_markers_df["symbol"].tolist()[:MAX_MARKER_GENES]
+                        ]
                     elif "marker_gene" in comp_markers_df.columns:
-                        comp_genes = [normalize_gene_symbol(g) for g in comp_markers_df["marker_gene"].tolist()[:MAX_MARKER_GENES]]
+                        comp_genes = [
+                            normalize_gene_symbol(g) for g in comp_markers_df["marker_gene"].tolist()[:MAX_MARKER_GENES]
+                        ]
             except Exception:
                 pass  # CellGuide may not have data for all cell types
 
@@ -502,9 +548,13 @@ def extract_czi_markers(
                 if cano_markers.status_code == 200 and cano_markers.text:
                     cano_markers_df = pd.DataFrame.from_records(cano_markers.json())
                     if "symbol" in cano_markers_df.columns:
-                        cano_genes = [normalize_gene_symbol(g) for g in cano_markers_df["symbol"].tolist()[:MAX_MARKER_GENES]]
+                        cano_genes = [
+                            normalize_gene_symbol(g) for g in cano_markers_df["symbol"].tolist()[:MAX_MARKER_GENES]
+                        ]
                     elif "marker_gene" in cano_markers_df.columns:
-                        cano_genes = [normalize_gene_symbol(g) for g in cano_markers_df["marker_gene"].tolist()[:MAX_MARKER_GENES]]
+                        cano_genes = [
+                            normalize_gene_symbol(g) for g in cano_markers_df["marker_gene"].tolist()[:MAX_MARKER_GENES]
+                        ]
             except Exception:
                 pass
 
@@ -534,6 +584,7 @@ def extract_czi_markers(
 # =============================================================================
 # Tool 5: Download CZI Reference (for Harmony integration)
 # =============================================================================
+
 
 @tool
 def download_czi_reference(
@@ -586,9 +637,7 @@ def download_czi_reference(
         try:
             # Download the dataset
             adata = cellxgene_census.get_anndata(
-                census,
-                organism=organism,
-                obs_value_filter=f'dataset_id == "{dataset_id}"'
+                census, organism=organism, obs_value_filter=f'dataset_id == "{dataset_id}"'
             )
 
             if adata.shape[0] == 0:
@@ -636,11 +685,11 @@ Dataset ID: {dataset_id}
 Organism: {organism}
 Cells: {n_cells:,}
 Genes: {n_genes:,}
-Cell types ({n_celltypes}): {', '.join(sorted(cell_types)[:20])}{'...' if n_celltypes > 20 else ''}
+Cell types ({n_celltypes}): {", ".join(sorted(cell_types)[:20])}{"..." if n_celltypes > 20 else ""}
 
 Reference file: {ref_adata_path}
 """
-            with open(summary_path, 'w') as f:
+            with open(summary_path, "w") as f:
                 f.write(summary)
 
             msg = f"""Successfully downloaded CZI reference dataset.
@@ -657,7 +706,7 @@ Next step: Use harmony_transfer_labels with ref_path="{ref_adata_path}" to trans
             census.close()
 
     except Exception as e:
-        msg = f"ERROR downloading CZI reference: {str(e)}"
+        msg = f"ERROR downloading CZI reference: {e!s}"
         print(msg)
         return msg
 
@@ -665,6 +714,7 @@ Next step: Use harmony_transfer_labels with ref_path="{ref_adata_path}" to trans
 # =============================================================================
 # Tool 6: Query Tissue Expression (ARCHS4)
 # =============================================================================
+
 
 @tool
 def query_tissue_expression(
@@ -681,6 +731,7 @@ def query_tissue_expression(
         - query_tissue_expression({"gene": "SLC17A7"})  # Neuronal marker
     """
     import gget
+
     from .utils import parse_list_string
 
     # Handle case where LLM passes a stringified list like "['CD3D', 'MS4A6A']"
@@ -726,6 +777,7 @@ def query_tissue_expression(
 # Tool 7: Query Cell Type Gene Sets (Enrichr)
 # =============================================================================
 
+
 @tool
 def query_celltype_genesets(
     tissue: Annotated[str, Field(description="Tissue type to search for cell type markers (e.g., 'brain', 'liver')")],
@@ -757,16 +809,12 @@ def query_celltype_genesets(
     # Get seed genes for the tissue, or use generic markers
     seed_genes = tissue_seed_genes.get(
         tissue.lower(),
-        ["PTPRC", "CD68", "PECAM1", "ACTA2", "KRT18", "VIM"]  # Generic markers
+        ["PTPRC", "CD68", "PECAM1", "ACTA2", "KRT18", "VIM"],  # Generic markers
     )
 
     try:
         # Query Enrichr with PanglaoDB cell type database
-        df = gget.enrichr(
-            seed_genes,
-            database="PanglaoDB_Augmented_2021",
-            plot=False
-        )
+        df = gget.enrichr(seed_genes, database="PanglaoDB_Augmented_2021", plot=False)
 
         if df is None or df.empty:
             return f"No cell type gene sets found for tissue '{tissue}'."
@@ -800,10 +848,13 @@ def query_celltype_genesets(
 # Tool 8: Validate Gene Expression in Tissue
 # =============================================================================
 
+
 @tool
 def validate_genes_expression(
     genes: Annotated[str, Field(description="Comma-separated list of gene symbols to validate")],
-    target_tissue: Annotated[str, Field(description="Target tissue to check expression in (e.g., 'brain', 'frontal cortex')")],
+    target_tissue: Annotated[
+        str, Field(description="Target tissue to check expression in (e.g., 'brain', 'frontal cortex')")
+    ],
 ) -> str:
     """Validate that a list of genes are expressed in the target tissue.
 
@@ -814,6 +865,7 @@ def validate_genes_expression(
         - validate_genes_expression({"genes": "GFAP, SLC17A7, GAD1", "target_tissue": "brain"})
     """
     import gget
+
     from .utils import parse_list_string
 
     # Parse genes - handles "gene1, gene2" and "['gene1', 'gene2']" formats
@@ -914,7 +966,7 @@ def _query_gwas_catalog(disease_trait: str, max_genes: int = 50) -> dict:
                                         associations.append({
                                             "gene": gene_name,
                                             "p_value": p_value,
-                                            "trait": disease_trait
+                                            "trait": disease_trait,
                                         })
 
         # Alternative: search by keyword in studies
@@ -950,7 +1002,7 @@ def _query_gwas_catalog(disease_trait: str, max_genes: int = 50) -> dict:
             "query": disease_trait,
             "genes": genes[:max_genes],
             "n_genes": len(genes[:max_genes]),
-            "associations": associations[:max_genes]
+            "associations": associations[:max_genes],
         }
 
     except Exception as e:
@@ -981,9 +1033,7 @@ def _query_opentargets(disease_query: str, max_genes: int = 50) -> dict:
         """
 
         response = requests.post(
-            api_url,
-            json={"query": search_query, "variables": {"queryString": disease_query}},
-            timeout=30
+            api_url, json={"query": search_query, "variables": {"queryString": disease_query}}, timeout=30
         )
 
         if response.status_code != 200:
@@ -1026,11 +1076,8 @@ def _query_opentargets(disease_query: str, max_genes: int = 50) -> dict:
 
         response = requests.post(
             api_url,
-            json={
-                "query": targets_query,
-                "variables": {"diseaseId": disease_id, "size": max_genes}
-            },
-            timeout=30
+            json={"query": targets_query, "variables": {"diseaseId": disease_id, "size": max_genes}},
+            timeout=30,
         )
 
         if response.status_code != 200:
@@ -1054,7 +1101,7 @@ def _query_opentargets(disease_query: str, max_genes: int = 50) -> dict:
                 gene_scores.append({
                     "gene": gene_symbol,
                     "name": target.get("approvedName", ""),
-                    "score": row.get("score", 0)
+                    "score": row.get("score", 0),
                 })
 
         return {
@@ -1064,7 +1111,7 @@ def _query_opentargets(disease_query: str, max_genes: int = 50) -> dict:
             "disease_name": disease_name,
             "genes": genes,
             "n_genes": len(genes),
-            "gene_details": gene_scores
+            "gene_details": gene_scores,
         }
 
     except Exception as e:
@@ -1073,8 +1120,15 @@ def _query_opentargets(disease_query: str, max_genes: int = 50) -> dict:
 
 @tool
 def query_disease_genes(
-    disease: Annotated[str, Field(description="Disease or trait to search (e.g., 'Alzheimer disease', 'schizophrenia', 'type 2 diabetes', 'cognitive function')")],
-    source: Annotated[str, Field(description="Database to query: 'opentargets', 'gwas', or 'all' (queries both)")] = "all",
+    disease: Annotated[
+        str,
+        Field(
+            description="Disease or trait to search (e.g., 'Alzheimer disease', 'schizophrenia', 'type 2 diabetes', 'cognitive function')"
+        ),
+    ],
+    source: Annotated[
+        str, Field(description="Database to query: 'opentargets', 'gwas', or 'all' (queries both)")
+    ] = "all",
     max_genes: Annotated[int, Field(ge=10, le=200, description="Maximum number of genes to return")] = 50,
 ) -> str:
     """Query disease-associated genes from real databases (GWAS Catalog, OpenTargets).
@@ -1157,7 +1211,7 @@ def query_disease_genes(
     # Genes found in multiple sources (higher confidence)
     multi_source = [g for g, sources in gene_sources.items() if len(sources) > 1]
     if multi_source:
-        results.append(f"\nHigh-confidence genes (found in multiple databases):")
+        results.append("\nHigh-confidence genes (found in multiple databases):")
         results.append(f"  {', '.join(multi_source)}")
 
     results.append(f"\nAll genes: {', '.join(sorted(all_genes))}")

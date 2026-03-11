@@ -21,7 +21,6 @@ from typing import Any, cast
 
 from bindu.penguin.bindufy import bindufy
 from dotenv import load_dotenv
-from pydantic import SecretStr
 
 from .agents import run_spatial_analysis
 
@@ -175,7 +174,7 @@ def main():
     parser.add_argument(
         "--openrouter-api-key",
         type=str,
-        default=os.getenv('OPENROUTER_API_KEY'),
+        default=os.getenv("OPENROUTER_API_KEY"),
         help="OpenRouter API key (env: OPENROUTER_API_KEY)",
     )
     parser.add_argument(
@@ -223,10 +222,3 @@ def main():
 # Bindufy and start the agent server
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-

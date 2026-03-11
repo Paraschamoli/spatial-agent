@@ -9,28 +9,25 @@ All tools are standalone functions following Biomni pattern.
 
 # Lightweight imports - keep at module level
 import os
-import json
 import pickle
 import warnings
+from os.path import exists
+from typing import Annotated
+
 import numpy as np
 import pandas as pd
-from typing import Annotated
-from os.path import exists
-from glob import glob
-
 from langchain_core.tools import tool
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
 from pydantic import Field
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 
 # Module-level config (set via configure_analytics_tools)
 _config = {
     "save_path": "./experiments",
 }
+
 
 def configure_analytics_tools(save_path: str = "./experiments"):
     """Configure paths for analytics tools. Call this before using the tools."""
@@ -40,6 +37,7 @@ def configure_analytics_tools(save_path: str = "./experiments"):
 # Default model for subagent LLM calls (fallback if agent model not set)
 DEFAULT_SUBAGENT_MODEL = "claude-sonnet-4-5-20250929"
 
+
 def _get_subagent_model() -> str:
     """Get the model to use for subagent calls.
 
@@ -47,6 +45,7 @@ def _get_subagent_model() -> str:
     """
     try:
         from ..agent import get_agent_model
+
         model = get_agent_model()
         return model if model else DEFAULT_SUBAGENT_MODEL
     except ImportError:
@@ -64,6 +63,7 @@ def _get_subagent_model() -> str:
 # =============================================================================
 # Tool 1: Preprocess
 # =============================================================================
+
 
 @tool
 def preprocess_spatial_data(
@@ -120,6 +120,7 @@ def preprocess_spatial_data(
 # Tool 2: Harmony Transfer
 # =============================================================================
 
+
 @tool
 def harmony_transfer_labels(
     adata_path: Annotated[str, Field(description="Path to preprocessed spatial data")],
@@ -141,7 +142,7 @@ def harmony_transfer_labels(
         print(msg)
         return msg
 
-    print(f"[harmony_transfer_labels] Loading spatial and reference data...")
+    print("[harmony_transfer_labels] Loading spatial and reference data...")
 
     # Load data
     adata_sp = sc.read_h5ad(adata_path)
@@ -199,7 +200,7 @@ def harmony_transfer_labels(
     predictions = clf.predict(X_test)
 
     # Save predictions (strip batch suffix added by concatenate)
-    cell_ids = ad_sp.obs.index.str.replace(r'-st$', '', regex=True)
+    cell_ids = ad_sp.obs.index.str.replace(r"-st$", "", regex=True)
     result_df = pd.DataFrame({"predicted_celltype": predictions}, index=cell_ids)
     csv_path = f"{save_path}/celltype_transferred.csv"
     result_df.to_csv(csv_path)
@@ -212,6 +213,7 @@ def harmony_transfer_labels(
 # =============================================================================
 # Tool 3: UTAG (Spatial Clustering)
 # =============================================================================
+
 
 def _estimate_max_dist(adata, slide_key=None, target_neighbors=3):
     """Estimate optimal max_dist for UTAG based on spatial density."""
@@ -247,8 +249,8 @@ def _remove_small_clusters(adata, label_key, slide_key=None, min_cells=100):
     in a specific sample, which causes issues in per-sample analysis (e.g.,
     statistical tests like Wilcoxon require >= 2 samples per group).
     """
-    from sklearn.neighbors import NearestNeighbors
     import numpy as np
+    from sklearn.neighbors import NearestNeighbors
 
     # Convert to string to avoid categorical issues
     adata.obs[label_key] = adata.obs[label_key].astype(str)
@@ -291,8 +293,10 @@ def _remove_small_clusters(adata, label_key, slide_key=None, min_cells=100):
         adata.obs.loc[cell_indices, label_key] = new_labels
 
         if small_clusters_in_batch:
-            print(f"Batch '{batch}': merged {len(small_clusters_in_batch)} small clusters "
-                  f"({cells_to_assign.sum()} cells) to nearest neighbors")
+            print(
+                f"Batch '{batch}': merged {len(small_clusters_in_batch)} small clusters "
+                f"({cells_to_assign.sum()} cells) to nearest neighbors"
+            )
 
     return adata
 
@@ -301,7 +305,9 @@ def _remove_small_clusters(adata, label_key, slide_key=None, min_cells=100):
 def run_utag_clustering(
     adata_path: Annotated[str, Field(description="Path to annotated spatial data")],
     save_path: Annotated[str, Field(description="Directory to save results")] = None,
-    slide_key: Annotated[str, Field(description="Column for sample/slide ID to run UTAG per sample (e.g., 'batch', 'sample_id')")] = None,
+    slide_key: Annotated[
+        str, Field(description="Column for sample/slide ID to run UTAG per sample (e.g., 'batch', 'sample_id')")
+    ] = None,
     max_dist: Annotated[float, Field(description="Max distance for neighbors. Use 0 for auto-estimation.")] = 0,
     min_cluster_size: Annotated[int, Field(description="Min cells per cluster (smaller merged to nearest)")] = 100,
     resolutions: Annotated[list, Field(description="Clustering resolutions to try")] = [0.05, 0.1, 0.3],
@@ -321,8 +327,8 @@ def run_utag_clustering(
     - Tries multiple resolutions and picks one with enough niches
     """
     save_path = save_path or _config["save_path"]
-    import scanpy as sc
     import matplotlib.pyplot as plt
+    import scanpy as sc
     from utag import utag
 
     output_path = f"{save_path}/utag_main_result.csv"
@@ -333,7 +339,7 @@ def run_utag_clustering(
         print(msg)
         return msg
 
-    print(f"[run_utag_clustering] Loading data and running UTAG...")
+    print("[run_utag_clustering] Loading data and running UTAG...")
 
     # Load data
     adata = sc.read_h5ad(adata_path)
@@ -401,8 +407,7 @@ def run_utag_clustering(
         for sample in utag_results.obs[slide_key].unique():
             sample_data = utag_results[utag_results.obs[slide_key] == sample]
             fig, ax = plt.subplots(figsize=(6, 6))
-            sc.pl.embedding(sample_data, basis="spatial", color="utag",
-                          palette="tab20", size=3, ax=ax, show=False)
+            sc.pl.embedding(sample_data, basis="spatial", color="utag", palette="tab20", size=3, ax=ax, show=False)
             ax.set_title(f"UTAG Niches - {sample}")
             plt.savefig(f"{save_path}/utag_niche_{sample}.png", dpi=150, bbox_inches="tight")
             plt.close()
@@ -417,6 +422,7 @@ def run_utag_clustering(
 # Tool 4: Gene Voting (LLM-based)
 # =============================================================================
 
+
 @tool
 def aggregate_gene_voting(
     adata_path: Annotated[str, Field(description="Path to annotated spatial data")],
@@ -427,6 +433,7 @@ def aggregate_gene_voting(
     save_path = save_path or _config["save_path"]
     # Heavy imports
     import scanpy as sc
+
     from ..agent import make_llm
 
     # Create LLM instance
@@ -452,12 +459,9 @@ def aggregate_gene_voting(
 
         # Get top marker genes
         sc.tl.rank_genes_groups(subset, groupby=group_by)
-        markers = subset.uns['rank_genes_groups']['names'][:20]
+        markers = subset.uns["rank_genes_groups"]["names"][:20]
 
-        results.append({
-            "group": group_name,
-            "marker_genes": markers.tolist()
-        })
+        results.append({"group": group_name, "marker_genes": markers.tolist()})
 
     # Save
     pd.DataFrame(results).to_csv(output_path)
@@ -470,6 +474,7 @@ def aggregate_gene_voting(
 # =============================================================================
 # Tool 5: Cell-Cell Interactions (Full LIANA + Cell2Cell + TensorLy)
 # =============================================================================
+
 
 @tool
 def liana_tensor(
@@ -489,9 +494,8 @@ def liana_tensor(
     """
     save_path = save_path or _config["save_path"]
     # Heavy imports - only load when this tool is called
-    import scanpy as sc
-    from tqdm.auto import tqdm
     import liana as li
+    import scanpy as sc
 
     output_path = f"{save_path}/cci_analysis/factor.pkl"
 
@@ -500,7 +504,7 @@ def liana_tensor(
         print(msg)
         return msg
 
-    print(f"[liana_tensor] Running LIANA + Tensor-Cell2Cell analysis...")
+    print("[liana_tensor] Running LIANA + Tensor-Cell2Cell analysis...")
 
     # Create output directory
     os.makedirs(f"{save_path}/cci_analysis", exist_ok=True)
@@ -529,31 +533,22 @@ def liana_tensor(
         resource_name=resource_name,
         use_raw=False,
         verbose=True,
-        key_added='liana_res'
+        key_added="liana_res",
     )
 
     # Get unique LR pairs
-    liana_res = adata.uns['liana_res']
-    lr_pairs = liana_res[['ligand_complex', 'receptor_complex']].drop_duplicates()
+    liana_res = adata.uns["liana_res"]
+    lr_pairs = liana_res[["ligand_complex", "receptor_complex"]].drop_duplicates()
     print(f"Found {len(lr_pairs)} unique ligand-receptor pairs")
 
     # Step 2: Build tensor using LIANA's built-in function
     print("Building interaction tensor...")
-    tensor = li.multi.to_tensor_c2c(
-        adata,
-        sample_key=sample_key,
-        score_key='magnitude_rank',
-        non_negative=True
-    )
+    tensor = li.multi.to_tensor_c2c(adata, sample_key=sample_key, score_key="magnitude_rank", non_negative=True)
 
     # Step 3: Tensor factorization using PreBuiltTensor's built-in method
     print("Running tensor factorization...")
     try:
-        tensor.compute_tensor_factorization(
-            rank=3,
-            init='random',
-            random_state=42
-        )
+        tensor.compute_tensor_factorization(rank=3, init="random", random_state=42)
     except Exception as e:
         # If factorization fails, return partial results
         print(f"Warning: Tensor factorization failed ({e}). Returning LIANA results only.")
@@ -564,18 +559,18 @@ def liana_tensor(
 
     # Get context (condition) mapping
     samples = adata.obs[sample_key].unique()
-    context_dict = dict(zip(samples, adata.obs.groupby(sample_key)[condition_key].first()))
+    context_dict = dict(zip(samples, adata.obs.groupby(sample_key)[condition_key].first(), strict=False))
 
     # Save results
     results = {
-        'tensor': tensor,  # Contains factorization results
-        'context_dict': context_dict,
-        'liana_res': liana_res,
-        'lr_pairs': lr_pairs.values.tolist(),
-        'samples': list(samples)
+        "tensor": tensor,  # Contains factorization results
+        "context_dict": context_dict,
+        "liana_res": liana_res,
+        "lr_pairs": lr_pairs.values.tolist(),
+        "samples": list(samples),
     }
 
-    with open(output_path, 'wb') as f:
+    with open(output_path, "wb") as f:
         pickle.dump(results, f)
 
     # Also save LIANA results as CSV
@@ -589,6 +584,7 @@ def liana_tensor(
 # =============================================================================
 # Tool 6: Dynamics (DEG Analysis)
 # =============================================================================
+
 
 @tool
 def infer_dynamics(
@@ -621,11 +617,7 @@ def infer_dynamics(
 
     # Run differential expression
     sc.tl.rank_genes_groups(
-        adata_subset,
-        groupby=condition_column,
-        groups=[condition2],
-        reference=condition1,
-        method='wilcoxon'
+        adata_subset, groupby=condition_column, groups=[condition2], reference=condition1, method="wilcoxon"
     )
 
     # Extract results
@@ -640,6 +632,7 @@ def infer_dynamics(
 # =============================================================================
 # Tool 7: Summarize Conditions
 # =============================================================================
+
 
 @tool
 def summarize_conditions(
@@ -711,7 +704,7 @@ def summarize_conditions(
 
     # Save
     summary_text = "\n".join(lines)
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         f.write(summary_text)
 
     # Also save cross-tabulation as CSV
@@ -727,6 +720,7 @@ def summarize_conditions(
 # =============================================================================
 # Tool 8: Summarize Cell Types (LLM-based)
 # =============================================================================
+
 
 @tool
 def summarize_celltypes(
@@ -746,7 +740,7 @@ def summarize_celltypes(
         print(msg)
         return msg
 
-    print(f"[summarize_celltypes] Analyzing cell types...")
+    print("[summarize_celltypes] Analyzing cell types...")
 
     # Load data
     adata = sc.read_h5ad(adata_path)
@@ -762,7 +756,7 @@ def summarize_celltypes(
 
     # Run differential expression to find markers for each cell type
     print(f"Running marker gene analysis for {len(celltype_counts)} cell types...")
-    sc.tl.rank_genes_groups(adata, groupby=cell_type_key, method='wilcoxon')
+    sc.tl.rank_genes_groups(adata, groupby=cell_type_key, method="wilcoxon")
 
     # Build summary
     lines = []
@@ -779,7 +773,7 @@ def summarize_celltypes(
 
         # Get marker genes for this cell type
         try:
-            markers = adata.uns['rank_genes_groups']['names'][celltype][:5].tolist()
+            markers = adata.uns["rank_genes_groups"]["names"][celltype][:5].tolist()
             marker_str = ", ".join(markers)
         except Exception:
             marker_str = "N/A"
@@ -788,15 +782,15 @@ def summarize_celltypes(
 
     # Save
     summary_text = "\n".join(lines)
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         f.write(summary_text)
 
     # Also save as CSV for easy access
     csv_path = f"{save_path}/celltype_summary.csv"
     summary_df = pd.DataFrame({
-        'cell_type': celltype_counts.index,
-        'count': celltype_counts.values,
-        'percentage': [100 * c / total_cells for c in celltype_counts.values]
+        "cell_type": celltype_counts.index,
+        "count": celltype_counts.values,
+        "percentage": [100 * c / total_cells for c in celltype_counts.values],
     })
     summary_df.to_csv(csv_path, index=False)
 
@@ -808,6 +802,7 @@ def summarize_celltypes(
 # =============================================================================
 # Tool 9: Summarize Tissue Regions (LLM-based)
 # =============================================================================
+
 
 @tool
 def summarize_tissue_regions(
@@ -868,10 +863,10 @@ def summarize_tissue_regions(
             top_celltypes.append(f"{ct} ({ct_pct:.0f}%)")
 
         composition_data.append({
-            'region': region,
-            'count': len(subset),
-            'percentage': region_pct,
-            'top_celltypes': ", ".join(top_celltypes)
+            "region": region,
+            "count": len(subset),
+            "percentage": region_pct,
+            "top_celltypes": ", ".join(top_celltypes),
         })
 
     lines.append("## Region Overview\n")
@@ -883,13 +878,13 @@ def summarize_tissue_regions(
 
     # Save
     summary_text = "\n".join(lines)
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         f.write(summary_text)
 
     # Also save composition matrix as CSV
     csv_path = f"{save_path}/tissue_region_composition.csv"
     # Create cross-tabulation
-    crosstab = pd.crosstab(adata.obs[region_key], adata.obs[cell_type_key], normalize='index') * 100
+    crosstab = pd.crosstab(adata.obs[region_key], adata.obs[cell_type_key], normalize="index") * 100
     crosstab.to_csv(csv_path)
 
     msg = f"Tissue region summary:\n{summary_text}\n\nSaved to {output_path} and {csv_path}"
@@ -901,11 +896,14 @@ def summarize_tissue_regions(
 # Tangram Tools for Spatial Mapping
 # =============================================================================
 
+
 @tool
 def tangram_preprocess(
     adata_sc_path: Annotated[str, Field(description="Path to single-cell RNA-seq data (h5ad)")],
     adata_sp_path: Annotated[str, Field(description="Path to spatial transcriptomics data (h5ad)")],
-    marker_genes: Annotated[str, Field(description="Comma-separated genes, or 'auto' to compute from scRNA-seq")] = "auto",
+    marker_genes: Annotated[
+        str, Field(description="Comma-separated genes, or 'auto' to compute from scRNA-seq")
+    ] = "auto",
     cell_type_key: Annotated[str, Field(description="Cell type column for auto marker detection")] = "cell_type",
     n_markers: Annotated[int, Field(description="Top markers per cell type if auto")] = 100,
     save_path: Annotated[str, Field(description="Directory to save preprocessed data")] = None,
@@ -932,6 +930,7 @@ def tangram_preprocess(
         markers = list(np.unique(markers_df.melt().value.values))
     else:
         from .utils import parse_list_string
+
         markers = parse_list_string(marker_genes)
 
     tg.pp_adatas(adata_sc, adata_sp, genes=markers)
@@ -975,15 +974,24 @@ def tangram_map_cells(
     adata_sp = sc.read_h5ad(adata_sp_path)
 
     if mode == "clusters":
-        ad_map = tg.map_cells_to_space(adata_sc, adata_sp, mode="clusters",
-            cluster_label=cluster_label, density_prior='rna_count_based',
-            num_epochs=num_epochs, device=device)
+        ad_map = tg.map_cells_to_space(
+            adata_sc,
+            adata_sp,
+            mode="clusters",
+            cluster_label=cluster_label,
+            density_prior="rna_count_based",
+            num_epochs=num_epochs,
+            device=device,
+        )
     else:
-        ad_map = tg.map_cells_to_space(adata_sc, adata_sp, mode="cells",
-            density_prior='rna_count_based', num_epochs=num_epochs, device=device)
+        ad_map = tg.map_cells_to_space(
+            adata_sc, adata_sp, mode="cells", density_prior="rna_count_based", num_epochs=num_epochs, device=device
+        )
 
     ad_map.write_h5ad(out_path, compression="gzip")
-    score = ad_map.uns.get("train_genes_df", pd.DataFrame())["train_score"].mean() if "train_genes_df" in ad_map.uns else 0
+    score = (
+        ad_map.uns.get("train_genes_df", pd.DataFrame())["train_score"].mean() if "train_genes_df" in ad_map.uns else 0
+    )
 
     msg = f"Mapped {ad_map.shape[0]} cells to {ad_map.shape[1]} spots. Avg score: {score:.3f}. Saved to {out_path}"
     print(msg)
@@ -1065,8 +1073,8 @@ def tangram_evaluate(
     Computes per-gene cosine similarity between predicted and measured expression.
     """
     save_path = save_path or _config["save_path"]
-    import scanpy as sc
     import matplotlib.pyplot as plt
+    import scanpy as sc
     from scipy import sparse
 
     os.makedirs(save_path, exist_ok=True)
@@ -1105,8 +1113,8 @@ def tangram_evaluate(
         score = (v1 @ v2) / norm if norm > 0 else 0
         scores.append(score)
 
-    df = pd.DataFrame({'gene': gene_names, 'score': scores})
-    df = df.sort_values('score', ascending=False)
+    df = pd.DataFrame({"gene": gene_names, "score": scores})
+    df = df.sort_values("score", ascending=False)
     df.to_csv(f"{save_path}/tangram_scores.csv", index=False)
 
     avg_score = np.nanmean(scores)
@@ -1115,22 +1123,22 @@ def tangram_evaluate(
     # Plot score distribution
     plt.ioff()
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-    axes[0].hist(scores, bins=20, color='coral', alpha=0.7, edgecolor='black')
-    axes[0].axvline(avg_score, color='red', linestyle='--', label=f'Mean: {avg_score:.3f}')
-    axes[0].set_xlabel('Cosine Similarity')
-    axes[0].set_ylabel('Count')
-    axes[0].set_title('Gene Score Distribution')
+    axes[0].hist(scores, bins=20, color="coral", alpha=0.7, edgecolor="black")
+    axes[0].axvline(avg_score, color="red", linestyle="--", label=f"Mean: {avg_score:.3f}")
+    axes[0].set_xlabel("Cosine Similarity")
+    axes[0].set_ylabel("Count")
+    axes[0].set_title("Gene Score Distribution")
     axes[0].legend()
 
     axes[1].scatter(range(len(scores)), sorted(scores, reverse=True), s=10, alpha=0.6)
-    axes[1].set_xlabel('Gene Rank')
-    axes[1].set_ylabel('Score')
-    axes[1].set_title('Ranked Gene Scores')
+    axes[1].set_xlabel("Gene Rank")
+    axes[1].set_ylabel("Score")
+    axes[1].set_title("Ranked Gene Scores")
     plt.tight_layout()
     plt.savefig(f"{save_path}/tangram_scores.png", dpi=150, bbox_inches="tight")
     plt.close()
 
-    top5 = ', '.join(df.head(5)['gene'].tolist())
+    top5 = ", ".join(df.head(5)["gene"].tolist())
 
     msg = f"Evaluation: Mean={avg_score:.3f}, Median={median_score:.3f} ({len(overlap)} genes). Top: {top5}. Saved to {save_path}/tangram_scores.csv"
     print(msg)
@@ -1140,6 +1148,7 @@ def tangram_evaluate(
 # =============================================================================
 # CellPhoneDB Tools - Cell-cell communication analysis
 # =============================================================================
+
 
 @tool
 def cellphonedb_prepare(
@@ -1160,12 +1169,9 @@ def cellphonedb_prepare(
     adata = sc.read_h5ad(adata_path)
 
     # Extract metadata
-    meta = pd.DataFrame({
-        'Cell': adata.obs_names,
-        'cell_type': adata.obs[cell_type_key].values
-    })
+    meta = pd.DataFrame({"Cell": adata.obs_names, "cell_type": adata.obs[cell_type_key].values})
     meta_path = f"{save_path}/cellphonedb_meta.txt"
-    meta.to_csv(meta_path, sep='\t', index=False)
+    meta.to_csv(meta_path, sep="\t", index=False)
 
     # Extract counts - CellPhoneDB expects normalized counts
     counts_path = f"{save_path}/cellphonedb_counts.h5ad"
@@ -1192,7 +1198,9 @@ def cellphonedb_analysis(
     meta_path: Annotated[str, Field(description="Path to metadata txt file")],
     iterations: Annotated[int, Field(description="Permutation iterations (0 for simple/no-stats method)")] = 1000,
     threshold: Annotated[float, Field(description="Min fraction of cells expressing gene")] = 0.1,
-    microenvs_path: Annotated[str, Field(description="Path to microenvironments file (optional, restricts to colocalized cells)")] = "",
+    microenvs_path: Annotated[
+        str, Field(description="Path to microenvironments file (optional, restricts to colocalized cells)")
+    ] = "",
     score_interactions: Annotated[bool, Field(description="Score interactions by specificity (0-10 scale)")] = False,
     threads: Annotated[int, Field(description="Number of threads")] = 4,
     save_path: Annotated[str, Field(description="Directory to save results")] = None,
@@ -1225,7 +1233,7 @@ def cellphonedb_analysis(
             cpdb_file_path=cpdb_file_path,
             meta_file_path=meta_path,
             counts_file_path=counts_path,
-            counts_data='hgnc_symbol',
+            counts_data="hgnc_symbol",
             output_path=out_path,
             threshold=threshold,
             microenvs_file_path=microenvs,
@@ -1243,7 +1251,7 @@ def cellphonedb_analysis(
             cpdb_file_path=cpdb_file_path,
             meta_file_path=meta_path,
             counts_file_path=counts_path,
-            counts_data='hgnc_symbol',
+            counts_data="hgnc_symbol",
             output_path=out_path,
             threshold=threshold,
             iterations=iterations,
@@ -1254,9 +1262,9 @@ def cellphonedb_analysis(
         method_name = "statistical"
 
     # Count results
-    means = results.get('means', pd.DataFrame())
-    pvals = results.get('pvalues', pd.DataFrame())
-    sig_means = results.get('significant_means', pd.DataFrame())
+    means = results.get("means", pd.DataFrame())
+    pvals = results.get("pvalues", pd.DataFrame())
+    sig_means = results.get("significant_means", pd.DataFrame())
 
     n_interactions = len(means) if len(means) > 0 else 0
     n_significant = (sig_means.notna().sum(axis=1) > 0).sum() if len(sig_means) > 0 else 0
@@ -1272,7 +1280,9 @@ def cellphonedb_degs_analysis(
     meta_path: Annotated[str, Field(description="Path to metadata txt file")],
     degs_path: Annotated[str, Field(description="Path to DEGs file (two columns: Cell, Gene)")],
     threshold: Annotated[float, Field(description="Min fraction of cells expressing gene")] = 0.1,
-    microenvs_path: Annotated[str, Field(description="Path to microenvironments file (optional, restricts to colocalized cells)")] = "",
+    microenvs_path: Annotated[
+        str, Field(description="Path to microenvironments file (optional, restricts to colocalized cells)")
+    ] = "",
     score_interactions: Annotated[bool, Field(description="Score interactions by specificity (0-10 scale)")] = False,
     threads: Annotated[int, Field(description="Number of threads")] = 4,
     save_path: Annotated[str, Field(description="Directory to save results")] = None,
@@ -1304,7 +1314,7 @@ def cellphonedb_degs_analysis(
         meta_file_path=meta_path,
         counts_file_path=counts_path,
         degs_file_path=degs_path,
-        counts_data='hgnc_symbol',
+        counts_data="hgnc_symbol",
         output_path=out_path,
         threshold=threshold,
         microenvs_file_path=microenvs,
@@ -1312,8 +1322,8 @@ def cellphonedb_degs_analysis(
         threads=threads,
     )
 
-    relevant = results.get('relevant_interactions', pd.DataFrame())
-    sig_means = results.get('significant_means', pd.DataFrame())
+    relevant = results.get("relevant_interactions", pd.DataFrame())
+    sig_means = results.get("significant_means", pd.DataFrame())
 
     n_relevant = (relevant == 1).sum().sum() if len(relevant) > 0 else 0
     n_interactions = len(sig_means) if len(sig_means) > 0 else 0
@@ -1348,19 +1358,30 @@ def cellphonedb_filter(
         print(msg)
         return msg
 
-    sig_means = pd.read_csv(sig_means_path, sep='\t' if sig_means_path.endswith('.txt') else ',')
+    sig_means = pd.read_csv(sig_means_path, sep="\t" if sig_means_path.endswith(".txt") else ",")
 
     # Get cell type pair columns (exclude metadata columns)
-    meta_cols = ['id_cp_interaction', 'interacting_pair', 'partner_a', 'partner_b',
-                 'gene_a', 'gene_b', 'secreted', 'receptor_a', 'receptor_b',
-                 'annotation_strategy', 'is_integrin', 'rank']
-    pair_cols = [c for c in sig_means.columns if c not in meta_cols and '|' in c]
+    meta_cols = [
+        "id_cp_interaction",
+        "interacting_pair",
+        "partner_a",
+        "partner_b",
+        "gene_a",
+        "gene_b",
+        "secreted",
+        "receptor_a",
+        "receptor_b",
+        "annotation_strategy",
+        "is_integrin",
+        "rank",
+    ]
+    pair_cols = [c for c in sig_means.columns if c not in meta_cols and "|" in c]
 
     filtered = sig_means.copy()
 
     # Filter by cell types
     if cell_types:
-        ct_list = [ct.strip() for ct in cell_types.split(',')]
+        ct_list = [ct.strip() for ct in cell_types.split(",")]
         matching_cols = [c for c in pair_cols if any(ct in c for ct in ct_list)]
         if matching_cols:
             keep_cols = [c for c in sig_means.columns if c not in pair_cols] + matching_cols
@@ -1370,10 +1391,9 @@ def cellphonedb_filter(
     # Filter by genes
     if genes:
         from .utils import parse_list_string
+
         gene_list = parse_list_string(genes, uppercase=True)
-        mask = filtered['interacting_pair'].str.upper().apply(
-            lambda x: any(g in x for g in gene_list)
-        )
+        mask = filtered["interacting_pair"].str.upper().apply(lambda x: any(g in x for g in gene_list))
         filtered = filtered[mask]
 
     # Filter by minimum mean expression
@@ -1420,19 +1440,30 @@ def cellphonedb_plot(
         print(msg)
         return msg
 
-    sep = '\t' if sig_means_path.endswith('.txt') else ','
+    sep = "\t" if sig_means_path.endswith(".txt") else ","
     sig_means = pd.read_csv(sig_means_path, sep=sep)
     pvals = pd.read_csv(pvals_path, sep=sep) if exists(pvals_path) else None
 
     # Get cell type pair columns
-    meta_cols = ['id_cp_interaction', 'interacting_pair', 'partner_a', 'partner_b',
-                 'gene_a', 'gene_b', 'secreted', 'receptor_a', 'receptor_b',
-                 'annotation_strategy', 'is_integrin', 'rank']
-    pair_cols = [c for c in sig_means.columns if c not in meta_cols and '|' in c]
+    meta_cols = [
+        "id_cp_interaction",
+        "interacting_pair",
+        "partner_a",
+        "partner_b",
+        "gene_a",
+        "gene_b",
+        "secreted",
+        "receptor_a",
+        "receptor_b",
+        "annotation_strategy",
+        "is_integrin",
+        "rank",
+    ]
+    pair_cols = [c for c in sig_means.columns if c not in meta_cols and "|" in c]
 
     # Filter by cell types if specified
     if cell_types:
-        ct_list = [ct.strip() for ct in cell_types.split(',')]
+        ct_list = [ct.strip() for ct in cell_types.split(",")]
         pair_cols = [c for c in pair_cols if any(ct in c for ct in ct_list)]
 
     if not pair_cols:
@@ -1441,50 +1472,44 @@ def cellphonedb_plot(
         return msg
 
     # Get top interactions by mean expression
-    means_data = sig_means[['interacting_pair'] + pair_cols].copy()
-    means_data['max_mean'] = means_data[pair_cols].max(axis=1)
-    means_data = means_data.nlargest(top_n, 'max_mean')
+    means_data = sig_means[["interacting_pair"] + pair_cols].copy()
+    means_data["max_mean"] = means_data[pair_cols].max(axis=1)
+    means_data = means_data.nlargest(top_n, "max_mean")
 
     plt.ioff()
 
     if plot_type == "dotplot":
         # Prepare data for dot plot
         plot_data = means_data.melt(
-            id_vars=['interacting_pair'],
-            value_vars=pair_cols,
-            var_name='cell_pair',
-            value_name='mean'
+            id_vars=["interacting_pair"], value_vars=pair_cols, var_name="cell_pair", value_name="mean"
         ).dropna()
 
         if pvals is not None:
-            pval_data = pvals[['interacting_pair'] + pair_cols].melt(
-                id_vars=['interacting_pair'],
-                value_vars=pair_cols,
-                var_name='cell_pair',
-                value_name='pvalue'
+            pval_data = pvals[["interacting_pair"] + pair_cols].melt(
+                id_vars=["interacting_pair"], value_vars=pair_cols, var_name="cell_pair", value_name="pvalue"
             )
-            plot_data = plot_data.merge(pval_data, on=['interacting_pair', 'cell_pair'])
-            plot_data['-log10(pval)'] = -np.log10(plot_data['pvalue'] + 1e-10)
+            plot_data = plot_data.merge(pval_data, on=["interacting_pair", "cell_pair"])
+            plot_data["-log10(pval)"] = -np.log10(plot_data["pvalue"] + 1e-10)
 
-        fig, ax = plt.subplots(figsize=(max(12, len(pair_cols)*0.8), max(8, top_n*0.3)))
+        fig, ax = plt.subplots(figsize=(max(12, len(pair_cols) * 0.8), max(8, top_n * 0.3)))
 
         # Create pivot for heatmap-style dot plot
-        pivot = plot_data.pivot(index='interacting_pair', columns='cell_pair', values='mean')
-        sns.heatmap(pivot, cmap='Reds', ax=ax, cbar_kws={'label': 'Mean Expression'})
-        ax.set_title(f'Top {top_n} Interactions')
-        plt.xticks(rotation=45, ha='right')
+        pivot = plot_data.pivot(index="interacting_pair", columns="cell_pair", values="mean")
+        sns.heatmap(pivot, cmap="Reds", ax=ax, cbar_kws={"label": "Mean Expression"})
+        ax.set_title(f"Top {top_n} Interactions")
+        plt.xticks(rotation=45, ha="right")
 
     elif plot_type == "heatmap":
         # Interaction count heatmap per cell type pair
         counts = (sig_means[pair_cols].notna() & (sig_means[pair_cols] > 0)).sum()
-        count_df = pd.DataFrame({'pair': counts.index, 'count': counts.values})
-        count_df[['source', 'target']] = count_df['pair'].str.split('|', expand=True)
+        count_df = pd.DataFrame({"pair": counts.index, "count": counts.values})
+        count_df[["source", "target"]] = count_df["pair"].str.split("|", expand=True)
 
-        pivot = count_df.pivot(index='source', columns='target', values='count').fillna(0)
+        pivot = count_df.pivot(index="source", columns="target", values="count").fillna(0)
 
         fig, ax = plt.subplots(figsize=(10, 8))
-        sns.heatmap(pivot, cmap='YlOrRd', annot=True, fmt='.0f', ax=ax)
-        ax.set_title('Significant Interactions per Cell Type Pair')
+        sns.heatmap(pivot, cmap="YlOrRd", annot=True, fmt=".0f", ax=ax)
+        ax.set_title("Significant Interactions per Cell Type Pair")
 
     elif plot_type == "chord":
         # Simplified chord-like visualization as bar plot
@@ -1492,10 +1517,10 @@ def cellphonedb_plot(
         counts = counts.sort_values(ascending=False).head(20)
 
         fig, ax = plt.subplots(figsize=(12, 6))
-        counts.plot(kind='bar', ax=ax, color='coral', edgecolor='black')
-        ax.set_ylabel('Number of Interactions')
-        ax.set_title('Interactions per Cell Type Pair')
-        plt.xticks(rotation=45, ha='right')
+        counts.plot(kind="bar", ax=ax, color="coral", edgecolor="black")
+        ax.set_ylabel("Number of Interactions")
+        ax.set_title("Interactions per Cell Type Pair")
+        plt.xticks(rotation=45, ha="right")
 
     else:
         msg = f"ERROR: Unknown plot type '{plot_type}'. Use 'dotplot', 'heatmap', or 'chord'"
@@ -1504,7 +1529,7 @@ def cellphonedb_plot(
 
     plt.tight_layout()
     out_path = f"{save_path}/cellphonedb_{plot_type}.png"
-    plt.savefig(out_path, dpi=150, bbox_inches='tight')
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
 
     msg = f"Created {plot_type} visualization. Saved to {out_path}"
@@ -1515,6 +1540,7 @@ def cellphonedb_plot(
 # =============================================================================
 # LIANA Tools - Multi-method cell-cell communication analysis
 # =============================================================================
+
 
 @tool
 def liana_inference(
@@ -1531,8 +1557,8 @@ def liana_inference(
     Works for single-sample or multi-sample analysis.
     """
     save_path = save_path or _config["save_path"]
-    import scanpy as sc
     import liana as li
+    import scanpy as sc
 
     os.makedirs(save_path, exist_ok=True)
     adata = sc.read_h5ad(adata_path)
@@ -1555,7 +1581,7 @@ def liana_inference(
             expr_prop=expr_prop,
             use_raw=False,
             verbose=True,
-            key_added='liana_res'
+            key_added="liana_res",
         )
         n_samples = adata.obs[sample_key].nunique()
         mode = f"multi-sample ({n_samples} samples)"
@@ -1568,12 +1594,12 @@ def liana_inference(
             expr_prop=expr_prop,
             use_raw=False,
             verbose=True,
-            key_added='liana_res'
+            key_added="liana_res",
         )
         mode = "single-sample"
 
     # Save results
-    liana_res = adata.uns['liana_res']
+    liana_res = adata.uns["liana_res"]
     out_csv = f"{save_path}/liana_results.csv"
     liana_res.to_csv(out_csv, index=False)
 
@@ -1582,7 +1608,7 @@ def liana_inference(
     adata.write_h5ad(out_h5ad, compression="gzip")
 
     n_interactions = len(liana_res)
-    n_pairs = liana_res[['source', 'target']].drop_duplicates().shape[0]
+    n_pairs = liana_res[["source", "target"]].drop_duplicates().shape[0]
 
     msg = f"LIANA {mode} analysis complete: {n_interactions} interactions across {n_pairs} cell type pairs. Saved to {out_csv}"
     print(msg)
@@ -1592,7 +1618,9 @@ def liana_inference(
 @tool
 def liana_spatial(
     adata_path: Annotated[str, Field(description="Path to spatial AnnData h5ad file")],
-    local_metric: Annotated[str, Field(description="Local metric: 'cosine', 'pearson', 'spearman', 'jaccard'")] = "cosine",
+    local_metric: Annotated[
+        str, Field(description="Local metric: 'cosine', 'pearson', 'spearman', 'jaccard'")
+    ] = "cosine",
     global_metric: Annotated[str, Field(description="Global metric: 'morans' or 'lee'")] = "morans",
     bandwidth: Annotated[float, Field(description="Spatial bandwidth for neighbor weights")] = 200,
     n_perms: Annotated[int, Field(description="Permutations for p-value calculation")] = 100,
@@ -1605,14 +1633,14 @@ def liana_spatial(
     Requires spatial coordinates in adata.obsm['spatial'].
     """
     save_path = save_path or _config["save_path"]
-    import scanpy as sc
     import liana as li
+    import scanpy as sc
 
     os.makedirs(save_path, exist_ok=True)
     adata = sc.read_h5ad(adata_path)
 
     # Check for spatial coordinates
-    if 'spatial' not in adata.obsm:
+    if "spatial" not in adata.obsm:
         return "ERROR: No spatial coordinates found in adata.obsm['spatial']"
 
     # Auto-detect organism
@@ -1624,7 +1652,7 @@ def liana_spatial(
     resource = "mouseconsensus" if organism == "mouse" else "consensus"
 
     # Build spatial neighbors
-    li.ut.spatial_neighbors(adata, bandwidth=bandwidth, cutoff=0.1, kernel='gaussian', set_diag=True)
+    li.ut.spatial_neighbors(adata, bandwidth=bandwidth, cutoff=0.1, kernel="gaussian", set_diag=True)
 
     # Run bivariate analysis
     lrdata = li.mt.bivariate(
@@ -1637,7 +1665,7 @@ def liana_spatial(
         add_categories=True,
         nz_prop=0.1,
         use_raw=False,
-        verbose=True
+        verbose=True,
     )
 
     # Save results
@@ -1672,8 +1700,8 @@ def liana_misty(
     Useful for understanding spatial dependencies between cell types, pathways, or gene programs.
     """
     save_path = save_path or _config["save_path"]
-    import scanpy as sc
     import liana as li
+    import scanpy as sc
     from liana.method import genericMistyData
     from liana.method.sp import LinearModel, RandomForestModel
 
@@ -1681,7 +1709,7 @@ def liana_misty(
     adata = sc.read_h5ad(adata_path)
 
     # Check for spatial coordinates
-    if 'spatial' not in adata.obsm:
+    if "spatial" not in adata.obsm:
         return "ERROR: No spatial coordinates found in adata.obsm['spatial']"
 
     # Build spatial neighbors
@@ -1692,9 +1720,9 @@ def liana_misty(
         intra = li.ut.obsm_to_adata(adata, target_key)
     else:
         # Use highly variable genes as default
-        if 'highly_variable' not in adata.var.columns:
+        if "highly_variable" not in adata.var.columns:
             sc.pp.highly_variable_genes(adata, n_top_genes=500)
-        hvg = adata.var[adata.var['highly_variable']].index
+        hvg = adata.var[adata.var["highly_variable"]].index
         intra = adata[:, hvg].copy()
 
     if predictor_key and predictor_key in adata.obsm:
@@ -1704,20 +1732,9 @@ def liana_misty(
 
     # Create MISTy data
     if extra is not None:
-        misty = genericMistyData(
-            intra=intra,
-            extra=extra,
-            cutoff=0.05,
-            bandwidth=bandwidth,
-            n_neighs=n_neighs
-        )
+        misty = genericMistyData(intra=intra, extra=extra, cutoff=0.05, bandwidth=bandwidth, n_neighs=n_neighs)
     else:
-        misty = genericMistyData(
-            intra=intra,
-            cutoff=0.05,
-            bandwidth=bandwidth,
-            n_neighs=n_neighs
-        )
+        misty = genericMistyData(intra=intra, cutoff=0.05, bandwidth=bandwidth, n_neighs=n_neighs)
 
     # Select model
     model = LinearModel if model_type == "linear" else RandomForestModel
@@ -1726,8 +1743,8 @@ def liana_misty(
     misty(model=model, bypass_intra=False, verbose=True)
 
     # Extract results
-    target_metrics = misty.uns.get('target_metrics', pd.DataFrame())
-    interactions = misty.uns.get('interactions', {})
+    target_metrics = misty.uns.get("target_metrics", pd.DataFrame())
+    interactions = misty.uns.get("interactions", {})
 
     # Save results as CSV (avoid pickling non-serializable objects)
     if len(target_metrics) > 0:
@@ -1739,8 +1756,8 @@ def liana_misty(
             view_df.to_csv(f"{save_path}/misty_{view_name}.csv")
 
     if len(target_metrics) > 0:
-        avg_r2 = target_metrics['multi_R2'].mean() if 'multi_R2' in target_metrics.columns else 0
-        avg_gain = target_metrics['gain_R2'].mean() if 'gain_R2' in target_metrics.columns else 0
+        avg_r2 = target_metrics["multi_R2"].mean() if "multi_R2" in target_metrics.columns else 0
+        avg_gain = target_metrics["gain_R2"].mean() if "gain_R2" in target_metrics.columns else 0
         msg = f"MISTy analysis complete: {len(target_metrics)} targets. Avg R²={avg_r2:.3f}, Avg gain={avg_gain:.3f}. Saved to {save_path}/misty_*.csv"
         print(msg)
         return msg
@@ -1764,19 +1781,19 @@ def liana_plot(
     Creates dotplots, tileplots, or source-target network plots of LR interactions.
     """
     save_path = save_path or _config["save_path"]
-    import scanpy as sc
     import matplotlib.pyplot as plt
+    import scanpy as sc
     import seaborn as sns
 
     os.makedirs(save_path, exist_ok=True)
 
     # Load results
-    if results_path.endswith('.csv'):
+    if results_path.endswith(".csv"):
         liana_res = pd.read_csv(results_path)
-    elif results_path.endswith('.h5ad'):
+    elif results_path.endswith(".h5ad"):
         adata = sc.read_h5ad(results_path)
-        if 'liana_res' in adata.uns:
-            liana_res = adata.uns['liana_res']
+        if "liana_res" in adata.uns:
+            liana_res = adata.uns["liana_res"]
         else:
             return "ERROR: No liana_res found in adata.uns"
     else:
@@ -1784,19 +1801,19 @@ def liana_plot(
 
     # Filter by cell types if specified
     if source_cells:
-        src_list = [s.strip() for s in source_cells.split(',')]
-        liana_res = liana_res[liana_res['source'].isin(src_list)]
+        src_list = [s.strip() for s in source_cells.split(",")]
+        liana_res = liana_res[liana_res["source"].isin(src_list)]
 
     if target_cells:
-        tgt_list = [t.strip() for t in target_cells.split(',')]
-        liana_res = liana_res[liana_res['target'].isin(tgt_list)]
+        tgt_list = [t.strip() for t in target_cells.split(",")]
+        liana_res = liana_res[liana_res["target"].isin(tgt_list)]
 
     if len(liana_res) == 0:
         return "ERROR: No interactions found after filtering"
 
     # Sort by magnitude or specificity
-    sort_col = 'magnitude_rank' if 'magnitude_rank' in liana_res.columns else 'lr_means'
-    ascending = True if 'rank' in sort_col else False
+    sort_col = "magnitude_rank" if "magnitude_rank" in liana_res.columns else "lr_means"
+    ascending = True if "rank" in sort_col else False
     liana_res = liana_res.sort_values(sort_col, ascending=ascending)
 
     plt.ioff()
@@ -1804,49 +1821,53 @@ def liana_plot(
     if plot_type == "dotplot":
         # Create interaction label
         liana_res = liana_res.head(top_n * 5)  # Get more for filtering
-        liana_res['interaction'] = liana_res['ligand_complex'] + ' → ' + liana_res['receptor_complex']
-        liana_res['cell_pair'] = liana_res['source'] + ' → ' + liana_res['target']
+        liana_res["interaction"] = liana_res["ligand_complex"] + " → " + liana_res["receptor_complex"]
+        liana_res["cell_pair"] = liana_res["source"] + " → " + liana_res["target"]
 
         # Get top interactions
-        top_interactions = liana_res.groupby('interaction')[sort_col].mean().sort_values(ascending=ascending).head(top_n).index
+        top_interactions = (
+            liana_res.groupby("interaction")[sort_col].mean().sort_values(ascending=ascending).head(top_n).index
+        )
 
-        plot_df = liana_res[liana_res['interaction'].isin(top_interactions)]
+        plot_df = liana_res[liana_res["interaction"].isin(top_interactions)]
 
         # Pivot for heatmap
-        if 'lr_means' in plot_df.columns:
-            pivot = plot_df.pivot_table(index='interaction', columns='cell_pair', values='lr_means', aggfunc='mean')
+        if "lr_means" in plot_df.columns:
+            pivot = plot_df.pivot_table(index="interaction", columns="cell_pair", values="lr_means", aggfunc="mean")
         else:
-            pivot = plot_df.pivot_table(index='interaction', columns='cell_pair', values='magnitude_rank', aggfunc='mean')
+            pivot = plot_df.pivot_table(
+                index="interaction", columns="cell_pair", values="magnitude_rank", aggfunc="mean"
+            )
 
-        fig, ax = plt.subplots(figsize=(max(10, len(pivot.columns)*0.6), max(8, len(pivot)*0.4)))
-        sns.heatmap(pivot, cmap='Reds', ax=ax, cbar_kws={'label': 'Expression'})
-        ax.set_title(f'Top {top_n} Ligand-Receptor Interactions')
-        plt.xticks(rotation=45, ha='right')
+        fig, ax = plt.subplots(figsize=(max(10, len(pivot.columns) * 0.6), max(8, len(pivot) * 0.4)))
+        sns.heatmap(pivot, cmap="Reds", ax=ax, cbar_kws={"label": "Expression"})
+        ax.set_title(f"Top {top_n} Ligand-Receptor Interactions")
+        plt.xticks(rotation=45, ha="right")
         plt.yticks(rotation=0)
 
     elif plot_type == "tileplot":
         # Interaction counts per cell pair
-        counts = liana_res.groupby(['source', 'target']).size().reset_index(name='n_interactions')
-        pivot = counts.pivot(index='source', columns='target', values='n_interactions').fillna(0)
+        counts = liana_res.groupby(["source", "target"]).size().reset_index(name="n_interactions")
+        pivot = counts.pivot(index="source", columns="target", values="n_interactions").fillna(0)
 
         fig, ax = plt.subplots(figsize=(10, 8))
-        sns.heatmap(pivot, cmap='YlOrRd', annot=True, fmt='.0f', ax=ax)
-        ax.set_title('Number of Interactions per Cell Type Pair')
+        sns.heatmap(pivot, cmap="YlOrRd", annot=True, fmt=".0f", ax=ax)
+        ax.set_title("Number of Interactions per Cell Type Pair")
 
     elif plot_type == "source_target":
         # Bar plot of interactions per source/target
         fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-        source_counts = liana_res['source'].value_counts().head(15)
-        source_counts.plot(kind='barh', ax=axes[0], color='steelblue')
-        axes[0].set_xlabel('Number of Interactions')
-        axes[0].set_title('Interactions by Source Cell Type')
+        source_counts = liana_res["source"].value_counts().head(15)
+        source_counts.plot(kind="barh", ax=axes[0], color="steelblue")
+        axes[0].set_xlabel("Number of Interactions")
+        axes[0].set_title("Interactions by Source Cell Type")
         axes[0].invert_yaxis()
 
-        target_counts = liana_res['target'].value_counts().head(15)
-        target_counts.plot(kind='barh', ax=axes[1], color='coral')
-        axes[1].set_xlabel('Number of Interactions')
-        axes[1].set_title('Interactions by Target Cell Type')
+        target_counts = liana_res["target"].value_counts().head(15)
+        target_counts.plot(kind="barh", ax=axes[1], color="coral")
+        axes[1].set_xlabel("Number of Interactions")
+        axes[1].set_title("Interactions by Target Cell Type")
         axes[1].invert_yaxis()
 
     else:
@@ -1854,7 +1875,7 @@ def liana_plot(
 
     plt.tight_layout()
     out_path = f"{save_path}/liana_{plot_type}.png"
-    plt.savefig(out_path, dpi=150, bbox_inches='tight')
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
 
     msg = f"Created {plot_type} visualization. Saved to {out_path}"
@@ -1865,6 +1886,7 @@ def liana_plot(
 # =============================================================================
 # Squidpy Tools - Spatial analysis and graph statistics
 # =============================================================================
+
 
 @tool
 def squidpy_spatial_neighbors(
@@ -1894,7 +1916,7 @@ def squidpy_spatial_neighbors(
     adata = sc.read_h5ad(adata_path)
 
     # Check for spatial coordinates
-    if 'spatial' not in adata.obsm:
+    if "spatial" not in adata.obsm:
         return "ERROR: No spatial coordinates found in adata.obsm['spatial']"
 
     # Map coord_type (handle 'visium' as alias for 'grid', 'auto' as None)
@@ -1919,7 +1941,7 @@ def squidpy_spatial_neighbors(
     adata.write_h5ad(out_path, compression="gzip")
 
     n_cells = adata.n_obs
-    n_edges = adata.obsp['spatial_connectivities'].nnz
+    n_edges = adata.obsp["spatial_connectivities"].nnz
 
     msg = f"Built spatial neighbors graph: {n_cells} cells, {n_edges} edges. Saved to {out_path}"
     print(msg)
@@ -1939,15 +1961,15 @@ def squidpy_nhood_enrichment(
     Requires spatial neighbors graph (run squidpy_spatial_neighbors first).
     """
     save_path = save_path or _config["save_path"]
+    import matplotlib.pyplot as plt
     import scanpy as sc
     import squidpy as sq
-    import matplotlib.pyplot as plt
 
     os.makedirs(save_path, exist_ok=True)
     adata = sc.read_h5ad(adata_path)
 
     # Check prerequisites
-    if 'spatial_connectivities' not in adata.obsp:
+    if "spatial_connectivities" not in adata.obsp:
         return "ERROR: No spatial neighbors found. Run squidpy_spatial_neighbors first."
 
     if cluster_key not in adata.obs.columns:
@@ -1961,7 +1983,7 @@ def squidpy_nhood_enrichment(
     fig, ax = plt.subplots(figsize=(10, 8))
     sq.pl.nhood_enrichment(adata, cluster_key=cluster_key, ax=ax)
     plt.tight_layout()
-    plt.savefig(f"{save_path}/squidpy_nhood_enrichment.png", dpi=150, bbox_inches='tight')
+    plt.savefig(f"{save_path}/squidpy_nhood_enrichment.png", dpi=150, bbox_inches="tight")
     plt.close()
 
     # Save results
@@ -1971,7 +1993,7 @@ def squidpy_nhood_enrichment(
     # Extract z-scores summary
     zscore_key = f"{cluster_key}_nhood_enrichment"
     if zscore_key in adata.uns:
-        zscores = adata.uns[zscore_key]['zscore']
+        zscores = adata.uns[zscore_key]["zscore"]
         max_enrich = zscores.max().max()
         min_enrich = zscores.min().min()
         msg = f"Neighborhood enrichment complete. Z-scores range: [{min_enrich:.2f}, {max_enrich:.2f}]. Saved to {out_path}"
@@ -1998,9 +2020,9 @@ def squidpy_co_occurrence(
     at various spatial distances.
     """
     save_path = save_path or _config["save_path"]
+    import matplotlib.pyplot as plt
     import scanpy as sc
     import squidpy as sq
-    import matplotlib.pyplot as plt
 
     os.makedirs(save_path, exist_ok=True)
     adata = sc.read_h5ad(adata_path)
@@ -2016,9 +2038,9 @@ def squidpy_co_occurrence(
     try:
         clusters = adata.obs[cluster_key].unique()[:3].tolist()
         sq.pl.co_occurrence(adata, cluster_key=cluster_key, clusters=clusters, figsize=(12, 4))
-        plt.savefig(f"{save_path}/co_occurrence.png", dpi=150, bbox_inches='tight')
+        plt.savefig(f"{save_path}/co_occurrence.png", dpi=150, bbox_inches="tight")
         plt.close()
-    except Exception as e:
+    except Exception:
         # Plotting may fail due to version issues, continue with data export
         pass
 
@@ -2053,19 +2075,20 @@ def squidpy_spatial_autocorr(
     adata = sc.read_h5ad(adata_path)
 
     # Check prerequisites
-    if 'spatial_connectivities' not in adata.obsp:
+    if "spatial_connectivities" not in adata.obsp:
         return "ERROR: No spatial neighbors found. Run squidpy_spatial_neighbors first."
 
     # Select genes
     if genes in ["hvg", "highly_variable"]:
-        if 'highly_variable' not in adata.var.columns:
+        if "highly_variable" not in adata.var.columns:
             # Compute HVGs if not present
             sc.pp.highly_variable_genes(adata, n_top_genes=min(500, adata.n_vars))
-        gene_list = adata.var[adata.var['highly_variable']].index.tolist()
+        gene_list = adata.var[adata.var["highly_variable"]].index.tolist()
     elif genes == "all":
         gene_list = adata.var_names.tolist()[:1000]  # Limit to avoid memory issues
     else:
         from .utils import parse_list_string
+
         gene_list = parse_list_string(genes)
         gene_list = [g for g in gene_list if g in adata.var_names]
 
@@ -2089,7 +2112,7 @@ def squidpy_spatial_autocorr(
     adata.write_h5ad(out_path, compression="gzip")
 
     # Summary
-    sig_genes = results_df[results_df['pval_norm'] < 0.05]
+    sig_genes = results_df[results_df["pval_norm"] < 0.05]
     top_genes = results_df.head(5).index.tolist()
 
     msg = f"Spatial autocorrelation ({mode}): {len(gene_list)} genes tested, {len(sig_genes)} significant. Top: {', '.join(top_genes)}. Saved to {save_path}/squidpy_{mode}.csv"
@@ -2109,9 +2132,9 @@ def squidpy_ripley(
     Determines whether cell types show clustered, random, or dispersed spatial patterns.
     """
     save_path = save_path or _config["save_path"]
+    import matplotlib.pyplot as plt
     import scanpy as sc
     import squidpy as sq
-    import matplotlib.pyplot as plt
 
     os.makedirs(save_path, exist_ok=True)
     adata = sc.read_h5ad(adata_path)
@@ -2127,7 +2150,7 @@ def squidpy_ripley(
     fig, ax = plt.subplots(figsize=(10, 6))
     sq.pl.ripley(adata, cluster_key=cluster_key, mode=mode, ax=ax)
     plt.tight_layout()
-    plt.savefig(f"{save_path}/squidpy_ripley_{mode}.png", dpi=150, bbox_inches='tight')
+    plt.savefig(f"{save_path}/squidpy_ripley_{mode}.png", dpi=150, bbox_inches="tight")
     plt.close()
 
     # Save results
@@ -2152,15 +2175,15 @@ def squidpy_centrality(
     Requires spatial neighbors graph (run squidpy_spatial_neighbors first).
     """
     save_path = save_path or _config["save_path"]
+    import matplotlib.pyplot as plt
     import scanpy as sc
     import squidpy as sq
-    import matplotlib.pyplot as plt
 
     os.makedirs(save_path, exist_ok=True)
     adata = sc.read_h5ad(adata_path)
 
     # Check prerequisites
-    if 'spatial_connectivities' not in adata.obsp:
+    if "spatial_connectivities" not in adata.obsp:
         return "ERROR: No spatial neighbors found. Run squidpy_spatial_neighbors first."
 
     if cluster_key not in adata.obs.columns:
@@ -2173,7 +2196,7 @@ def squidpy_centrality(
     plt.ioff()
     try:
         sq.pl.centrality_scores(adata, cluster_key=cluster_key, figsize=(12, 6))
-        plt.savefig(f"{save_path}/centrality.png", dpi=150, bbox_inches='tight')
+        plt.savefig(f"{save_path}/centrality.png", dpi=150, bbox_inches="tight")
         plt.close()
     except Exception:
         # Plotting may fail due to version issues
@@ -2207,15 +2230,15 @@ def squidpy_interaction_matrix(
     Requires spatial neighbors graph (run squidpy_spatial_neighbors first).
     """
     save_path = save_path or _config["save_path"]
+    import matplotlib.pyplot as plt
     import scanpy as sc
     import squidpy as sq
-    import matplotlib.pyplot as plt
 
     os.makedirs(save_path, exist_ok=True)
     adata = sc.read_h5ad(adata_path)
 
     # Check prerequisites
-    if 'spatial_connectivities' not in adata.obsp:
+    if "spatial_connectivities" not in adata.obsp:
         return "ERROR: No spatial neighbors found. Run squidpy_spatial_neighbors first."
 
     if cluster_key not in adata.obs.columns:
@@ -2229,7 +2252,7 @@ def squidpy_interaction_matrix(
     fig, ax = plt.subplots(figsize=(10, 8))
     sq.pl.interaction_matrix(adata, cluster_key=cluster_key, ax=ax)
     plt.tight_layout()
-    plt.savefig(f"{save_path}/squidpy_interaction_matrix.png", dpi=150, bbox_inches='tight')
+    plt.savefig(f"{save_path}/squidpy_interaction_matrix.png", dpi=150, bbox_inches="tight")
     plt.close()
 
     # Save results
@@ -2282,8 +2305,8 @@ def squidpy_ligrec(
     )
 
     # Save results
-    means_df = res['means']
-    pvals_df = res['pvalues']
+    means_df = res["means"]
+    pvals_df = res["pvalues"]
 
     means_df.to_csv(f"{save_path}/squidpy_ligrec_means.csv")
     pvals_df.to_csv(f"{save_path}/squidpy_ligrec_pvalues.csv")
@@ -2300,6 +2323,7 @@ def squidpy_ligrec(
 # =============================================================================
 # scvi-tools Spatial Deconvolution Tools
 # =============================================================================
+
 
 @tool
 def destvi_deconvolution(
@@ -2321,7 +2345,6 @@ def destvi_deconvolution(
     """
     save_path = save_path or _config["save_path"]
     import scanpy as sc
-    import scvi
     from scvi.model import CondSCVI, DestVI
 
     os.makedirs(save_path, exist_ok=True)
@@ -2389,7 +2412,9 @@ def cell2location_mapping(
     cell_type_key: Annotated[str, Field(description="Column in sc_adata.obs for cell type labels")] = "cell_type",
     batch_key: Annotated[str, Field(description="Column for batch information (optional)")] = "",
     n_cells_per_location: Annotated[int, Field(description="Expected cells per spot (tissue-dependent)")] = 30,
-    detection_alpha: Annotated[float, Field(description="Detection sensitivity (200 default, 20 for high variation)")] = 200,
+    detection_alpha: Annotated[
+        float, Field(description="Detection sensitivity (200 default, 20 for high variation)")
+    ] = 200,
     sc_max_epochs: Annotated[int, Field(description="Max epochs for reference model")] = 250,
     st_max_epochs: Annotated[int, Field(description="Max epochs for spatial model")] = 30000,
     save_path: Annotated[str, Field(description="Directory to save results")] = None,
@@ -2439,10 +2464,7 @@ def cell2location_mapping(
     ref_model.train(max_epochs=sc_max_epochs, accelerator="auto")
 
     # Export signatures
-    sc_adata = ref_model.export_posterior(
-        sc_adata,
-        sample_kwargs={"num_samples": 1000, "batch_size": 2500}
-    )
+    sc_adata = ref_model.export_posterior(sc_adata, sample_kwargs={"num_samples": 1000, "batch_size": 2500})
 
     # Get signatures for spatial model
     if "means_per_cluster_mu_fg" in sc_adata.varm:
@@ -2463,17 +2485,12 @@ def cell2location_mapping(
     st_model.train(max_epochs=st_max_epochs, accelerator="auto")
 
     # Export results
-    st_adata = st_model.export_posterior(
-        st_adata,
-        sample_kwargs={"num_samples": 1000, "batch_size": st_adata.n_obs}
-    )
+    st_adata = st_model.export_posterior(st_adata, sample_kwargs={"num_samples": 1000, "batch_size": st_adata.n_obs})
 
     # Save results
     if "q05_cell_abundance_w_sf" in st_adata.obsm:
         abundance = pd.DataFrame(
-            st_adata.obsm["q05_cell_abundance_w_sf"],
-            index=st_adata.obs_names,
-            columns=inf_aver.index
+            st_adata.obsm["q05_cell_abundance_w_sf"], index=st_adata.obs_names, columns=inf_aver.index
         )
         abundance.to_csv(f"{save_path}/cell2location_abundance.csv")
 
@@ -2608,10 +2625,11 @@ def gimvi_imputation(
 
     if genes_to_impute:
         from .utils import parse_list_string
+
         target_genes = parse_list_string(genes_to_impute)
         missing_genes = [g for g in target_genes if g in sc_genes and g not in st_genes]
         if not missing_genes:
-            return f"ERROR: No valid genes to impute. Genes must be in scRNA-seq but not in spatial data."
+            return "ERROR: No valid genes to impute. Genes must be in scRNA-seq but not in spatial data."
     else:
         missing_genes = list(sc_genes - st_genes)
 
@@ -2640,11 +2658,7 @@ def gimvi_imputation(
 
     # Create imputed expression matrix
     # gimVI imputes expression for common genes using the joint latent space
-    imputed_df = pd.DataFrame(
-        imputed_spatial,
-        index=st_adata_train.obs_names,
-        columns=common_genes
-    )
+    imputed_df = pd.DataFrame(imputed_spatial, index=st_adata_train.obs_names, columns=common_genes)
 
     # Save results
     imputed_df.to_csv(f"{save_path}/gimvi_imputed.csv")
@@ -2667,6 +2681,7 @@ def gimvi_imputation(
 # =============================================================================
 # Spatial Domain Detection Tools (SpaGCN, GraphST)
 # =============================================================================
+
 
 @tool
 def spagcn_clustering(
@@ -2693,9 +2708,10 @@ def spagcn_clustering(
     Outputs: Cluster assignments, refined clusters (optional), trained model.
     """
     save_path = save_path or _config["save_path"]
+    import random
+
     import scanpy as sc
     import SpaGCN as spg
-    import random
     import torch
 
     os.makedirs(save_path, exist_ok=True)
@@ -2708,11 +2724,11 @@ def spagcn_clustering(
     if x_pixel_col in adata.obs.columns and y_pixel_col in adata.obs.columns:
         x_pixel = adata.obs[x_pixel_col].values
         y_pixel = adata.obs[y_pixel_col].values
-    elif 'spatial' in adata.obsm:
-        x_pixel = adata.obsm['spatial'][:, 0]
-        y_pixel = adata.obsm['spatial'][:, 1]
-        adata.obs['x_pixel'] = x_pixel
-        adata.obs['y_pixel'] = y_pixel
+    elif "spatial" in adata.obsm:
+        x_pixel = adata.obsm["spatial"][:, 0]
+        y_pixel = adata.obsm["spatial"][:, 1]
+        adata.obs["x_pixel"] = x_pixel
+        adata.obs["y_pixel"] = y_pixel
     else:
         return f"ERROR: No spatial coordinates found. Need '{x_pixel_col}'/'{y_pixel_col}' in obs or 'spatial' in obsm."
 
@@ -2727,11 +2743,10 @@ def spagcn_clustering(
     # Calculate adjacency matrix
     if histology_path and os.path.exists(histology_path):
         import cv2
+
         img = cv2.imread(histology_path)
         adj = spg.calculate_adj_matrix(
-            x=x_pixel, y=y_pixel,
-            x_pixel=x_pixel, y_pixel=y_pixel,
-            image=img, beta=beta, alpha=alpha, histology=True
+            x=x_pixel, y=y_pixel, x_pixel=x_pixel, y_pixel=y_pixel, image=img, beta=beta, alpha=alpha, histology=True
         )
     else:
         adj = spg.calculate_adj_matrix(x=x_pixel, y=y_pixel, histology=False)
@@ -2753,35 +2768,38 @@ def spagcn_clustering(
 
     # Search for resolution
     res = spg.search_res(
-        adata, adj, l, n_clusters,
-        start=0.7, step=0.1, tol=5e-3, lr=0.05, max_epochs=20,
-        r_seed=r_seed, t_seed=t_seed, n_seed=n_seed
+        adata,
+        adj,
+        l,
+        n_clusters,
+        start=0.7,
+        step=0.1,
+        tol=5e-3,
+        lr=0.05,
+        max_epochs=20,
+        r_seed=r_seed,
+        t_seed=t_seed,
+        n_seed=n_seed,
     )
 
     # Train SpaGCN
     clf = spg.SpaGCN()
     clf.set_l(l)
-    clf.train(
-        adata, adj,
-        init_spa=True, init="leiden", res=res,
-        tol=5e-3, lr=0.05, max_epochs=max_epochs
-    )
+    clf.train(adata, adj, init_spa=True, init="leiden", res=res, tol=5e-3, lr=0.05, max_epochs=max_epochs)
 
     # Get predictions
     y_pred, prob = clf.predict()
     adata.obs["spagcn_pred"] = y_pred
-    adata.obs["spagcn_pred"] = adata.obs["spagcn_pred"].astype('category')
+    adata.obs["spagcn_pred"] = adata.obs["spagcn_pred"].astype("category")
 
     # Refine predictions
     if refine:
         adj_2d = spg.calculate_adj_matrix(x=x_array, y=y_array, histology=False)
         refined_pred = spg.refine(
-            sample_id=adata.obs.index.tolist(),
-            pred=adata.obs["spagcn_pred"].tolist(),
-            dis=adj_2d, shape=shape
+            sample_id=adata.obs.index.tolist(), pred=adata.obs["spagcn_pred"].tolist(), dis=adj_2d, shape=shape
         )
         adata.obs["spagcn_refined"] = refined_pred
-        adata.obs["spagcn_refined"] = adata.obs["spagcn_refined"].astype('category')
+        adata.obs["spagcn_refined"] = adata.obs["spagcn_refined"].astype("category")
 
     # Save results
     adata.write_h5ad(f"{save_path}/spagcn_result.h5ad", compression="gzip")
@@ -2823,28 +2841,25 @@ def graphst_clustering(
     save_path = save_path or _config["save_path"]
     import scanpy as sc
     import torch
-    from GraphST.GraphST import GraphST
     from GraphST import clustering
+    from GraphST.GraphST import GraphST
 
     os.makedirs(save_path, exist_ok=True)
 
     # Set device
     if device == "cuda" and torch.cuda.is_available():
-        device_obj = torch.device('cuda')
+        device_obj = torch.device("cuda")
     else:
-        device_obj = torch.device('cpu')
+        device_obj = torch.device("cpu")
 
     # Load data
     adata = sc.read_h5ad(adata_path)
     adata.var_names_make_unique()
 
     # Check for spatial coordinates
-    if 'spatial' not in adata.obsm:
-        if 'x_pixel' in adata.obs.columns and 'y_pixel' in adata.obs.columns:
-            adata.obsm['spatial'] = np.array([
-                adata.obs['x_pixel'].values,
-                adata.obs['y_pixel'].values
-            ]).T
+    if "spatial" not in adata.obsm:
+        if "x_pixel" in adata.obs.columns and "y_pixel" in adata.obs.columns:
+            adata.obsm["spatial"] = np.array([adata.obs["x_pixel"].values, adata.obs["y_pixel"].values]).T
         else:
             return "ERROR: No spatial coordinates found. Need 'spatial' in obsm or 'x_pixel'/'y_pixel' in obs."
 
@@ -2858,32 +2873,32 @@ def graphst_clustering(
     adata = model.train()
 
     # Perform clustering on the learned embeddings
-    if cluster_method == 'leiden':
+    if cluster_method == "leiden":
         clustering(adata, n_clusters=n_clusters, method=cluster_method, start=0.1, end=2.0, increment=0.01)
     else:
         return f"ERROR: Unknown clustering method '{cluster_method}'. Use 'leiden'."
 
     # Rename cluster column for consistency
-    if 'domain' in adata.obs.columns:
-        adata.obs['graphst_cluster'] = adata.obs['domain'].astype('category')
+    if "domain" in adata.obs.columns:
+        adata.obs["graphst_cluster"] = adata.obs["domain"].astype("category")
 
     # Save results
     adata.write_h5ad(f"{save_path}/graphst_result.h5ad", compression="gzip")
 
     # Save cluster assignments
-    if 'graphst_cluster' in adata.obs.columns:
-        clusters_df = adata.obs[['graphst_cluster']].copy()
+    if "graphst_cluster" in adata.obs.columns:
+        clusters_df = adata.obs[["graphst_cluster"]].copy()
         clusters_df.to_csv(f"{save_path}/graphst_clusters.csv")
-        n_domains = adata.obs['graphst_cluster'].nunique()
+        n_domains = adata.obs["graphst_cluster"].nunique()
     else:
         n_domains = "unknown"
 
     # Save embeddings
-    if 'emb' in adata.obsm:
+    if "emb" in adata.obsm:
         emb_df = pd.DataFrame(
-            adata.obsm['emb'],
+            adata.obsm["emb"],
             index=adata.obs_names,
-            columns=[f'GraphST_{i}' for i in range(adata.obsm['emb'].shape[1])]
+            columns=[f"GraphST_{i}" for i in range(adata.obsm["emb"].shape[1])],
         )
         emb_df.to_csv(f"{save_path}/graphst_embeddings.csv")
 
@@ -2897,6 +2912,7 @@ def graphst_clustering(
 # =============================================================================
 # Scanpy Tools: Gene Scoring
 # =============================================================================
+
 
 @tool
 def scanpy_score_genes(
@@ -2978,11 +2994,14 @@ def scanpy_score_genes(
 # Scanpy Tools: Integration - Ingest
 # =============================================================================
 
+
 @tool
 def scanpy_ingest(
     adata_query_path: Annotated[str, Field(description="Path to query h5ad file (data to annotate)")],
     adata_ref_path: Annotated[str, Field(description="Path to reference h5ad file (annotated data)")],
-    obs_keys: Annotated[list[str], Field(description="Observation keys to transfer from reference (e.g., ['cell_type', 'cluster'])")],
+    obs_keys: Annotated[
+        list[str], Field(description="Observation keys to transfer from reference (e.g., ['cell_type', 'cluster'])")
+    ],
     embedding: Annotated[str, Field(description="Embedding to use for mapping: 'pca' or 'umap'")] = "umap",
     use_rep: Annotated[str, Field(description="Key in adata.obsm for representation (e.g., 'X_pca')")] = "X_pca",
     save_path: Annotated[str, Field(description="Directory to save results")] = None,
@@ -3025,8 +3044,8 @@ def scanpy_ingest(
     if use_rep not in adata_ref.obsm:
         return f"ERROR: Reference missing '{use_rep}' in obsm. Run PCA on reference first."
 
-    if embedding == 'umap' and 'X_umap' not in adata_ref.obsm:
-        return f"ERROR: Reference missing 'X_umap' in obsm. Run UMAP on reference first or use embedding='pca'."
+    if embedding == "umap" and "X_umap" not in adata_ref.obsm:
+        return "ERROR: Reference missing 'X_umap' in obsm. Run UMAP on reference first or use embedding='pca'."
 
     # Check if obs_keys exist in reference
     missing_keys = [k for k in obs_keys if k not in adata_ref.obs.columns]
@@ -3049,7 +3068,7 @@ def scanpy_ingest(
     transferred_df = adata_query.obs[obs_keys].copy()
     transferred_df.to_csv(f"{save_path}/ingest_annotations.csv")
 
-    result = f"Ingest complete:\n"
+    result = "Ingest complete:\n"
     result += f"  - Query: {adata_query.n_obs} cells\n"
     result += f"  - Reference: {adata_ref.n_obs} cells\n"
     result += f"  - Common genes: {len(common_genes)}\n"
@@ -3068,6 +3087,7 @@ def scanpy_ingest(
 # =============================================================================
 # Scanpy Tools: Integration - BBKNN
 # =============================================================================
+
 
 @tool
 def scanpy_bbknn(
@@ -3139,9 +3159,9 @@ def scanpy_bbknn(
     os.makedirs(save_path, exist_ok=True)
     adata.write_h5ad(f"{save_path}/bbknn_result.h5ad", compression="gzip")
 
-    result = f"BBKNN integration complete:\n"
+    result = "BBKNN integration complete:\n"
     result += f"  - {adata.n_obs} cells across {n_batches} batches\n"
-    result += f"  - Batch distribution:\n"
+    result += "  - Batch distribution:\n"
     for batch, count in batch_counts.head(5).items():
         result += f"      {batch}: {count} cells\n"
     if n_batches > 5:
@@ -3157,10 +3177,13 @@ def scanpy_bbknn(
 # Trajectory Inference: scVelo
 # =============================================================================
 
+
 @tool
 def scvelo_velocity(
     adata_path: Annotated[str, Field(description="Path to h5ad file with spliced/unspliced counts")],
-    mode: Annotated[str, Field(description="Velocity mode: 'deterministic', 'stochastic', or 'dynamical'")] = "stochastic",
+    mode: Annotated[
+        str, Field(description="Velocity mode: 'deterministic', 'stochastic', or 'dynamical'")
+    ] = "stochastic",
     n_top_genes: Annotated[int, Field(description="Number of highly variable genes to use")] = 2000,
     n_pcs: Annotated[int, Field(description="Number of PCs for neighbors")] = 30,
     n_neighbors: Annotated[int, Field(description="Number of neighbors")] = 30,
@@ -3182,13 +3205,13 @@ def scvelo_velocity(
     - dynamical: Full dynamical model, most accurate but slower
     """
     save_path = save_path or _config["save_path"]
-    import scvelo as scv
     import scanpy as sc
+    import scvelo as scv
 
     adata = sc.read_h5ad(adata_path)
 
     # Check for required layers
-    if 'spliced' not in adata.layers or 'unspliced' not in adata.layers:
+    if "spliced" not in adata.layers or "unspliced" not in adata.layers:
         return "ERROR: Data must have 'spliced' and 'unspliced' layers. Run velocyto or kallisto bustools first."
 
     # Filter and normalize
@@ -3198,9 +3221,9 @@ def scvelo_velocity(
     scv.pp.moments(adata, n_pcs=n_pcs, n_neighbors=n_neighbors)
 
     # Compute velocity
-    if mode == 'dynamical':
+    if mode == "dynamical":
         scv.tl.recover_dynamics(adata)
-        scv.tl.velocity(adata, mode='dynamical')
+        scv.tl.velocity(adata, mode="dynamical")
     else:
         scv.tl.velocity(adata, mode=mode)
 
@@ -3213,14 +3236,14 @@ def scvelo_velocity(
 
     # Get velocity statistics
     n_cells = adata.n_obs
-    n_genes_velocity = adata.var['velocity_genes'].sum() if 'velocity_genes' in adata.var else 'N/A'
+    n_genes_velocity = adata.var["velocity_genes"].sum() if "velocity_genes" in adata.var else "N/A"
 
-    result = f"RNA velocity computed successfully:\n"
+    result = "RNA velocity computed successfully:\n"
     result += f"  - Mode: {mode}\n"
     result += f"  - Cells: {n_cells}\n"
     result += f"  - Velocity genes: {n_genes_velocity}\n"
     result += f"  - Saved to {save_path}/velocity_result.h5ad\n"
-    result += f"\nNext steps: Use scvelo_velocity_embedding for visualization"
+    result += "\nNext steps: Use scvelo_velocity_embedding for visualization"
 
     print(result)
     return result
@@ -3243,14 +3266,14 @@ def scvelo_velocity_embedding(
     - Data must have the specified embedding (e.g., X_umap)
     """
     save_path = save_path or _config["save_path"]
-    import scvelo as scv
-    import scanpy as sc
     import matplotlib.pyplot as plt
+    import scanpy as sc
+    import scvelo as scv
 
     adata = sc.read_h5ad(adata_path)
 
     # Check velocity exists
-    if 'velocity' not in adata.layers:
+    if "velocity" not in adata.layers:
         return "ERROR: Velocity not computed. Run scvelo_velocity first."
 
     # Check embedding exists
@@ -3258,9 +3281,10 @@ def scvelo_velocity_embedding(
     if embed_key not in adata.obsm:
         # Try to compute it
         import scanpy as sc
-        if basis == 'umap':
+
+        if basis == "umap":
             sc.tl.umap(adata)
-        elif basis == 'tsne':
+        elif basis == "tsne":
             sc.tl.tsne(adata)
         else:
             return f"ERROR: Embedding '{basis}' not found. Available: {list(adata.obsm.keys())}"
@@ -3270,19 +3294,19 @@ def scvelo_velocity_embedding(
     # Create velocity embedding stream plot
     fig, ax = plt.subplots(figsize=(10, 8))
     scv.pl.velocity_embedding_stream(adata, basis=basis, color=color_by, ax=ax, show=False)
-    plt.savefig(f"{save_path}/velocity_stream_{basis}.png", dpi=150, bbox_inches='tight')
+    plt.savefig(f"{save_path}/velocity_stream_{basis}.png", dpi=150, bbox_inches="tight")
     plt.close()
 
     # Create velocity embedding grid plot
     fig, ax = plt.subplots(figsize=(10, 8))
     scv.pl.velocity_embedding_grid(adata, basis=basis, color=color_by, ax=ax, show=False)
-    plt.savefig(f"{save_path}/velocity_grid_{basis}.png", dpi=150, bbox_inches='tight')
+    plt.savefig(f"{save_path}/velocity_grid_{basis}.png", dpi=150, bbox_inches="tight")
     plt.close()
 
     # Save updated adata
     adata.write_h5ad(f"{save_path}/velocity_embedding.h5ad", compression="gzip")
 
-    result = f"Velocity embedding created:\n"
+    result = "Velocity embedding created:\n"
     result += f"  - Basis: {basis}\n"
     result += f"  - Stream plot: {save_path}/velocity_stream_{basis}.png\n"
     result += f"  - Grid plot: {save_path}/velocity_grid_{basis}.png\n"
@@ -3295,6 +3319,7 @@ def scvelo_velocity_embedding(
 # =============================================================================
 # Trajectory Inference: CellRank
 # =============================================================================
+
 
 @tool
 def cellrank_terminal_states(
@@ -3325,7 +3350,7 @@ def cellrank_terminal_states(
 
     # Create kernel based on data type
     if use_velocity:
-        if 'velocity' not in adata.layers:
+        if "velocity" not in adata.layers:
             return "ERROR: Velocity not found. Run scvelo_velocity first or set use_velocity=False."
         # Velocity kernel
         vk = cr.kernels.VelocityKernel(adata)
@@ -3333,7 +3358,7 @@ def cellrank_terminal_states(
         kernel = vk
     else:
         # Connectivity kernel (based on neighbors graph)
-        if 'neighbors' not in adata.uns:
+        if "neighbors" not in adata.uns:
             sc.pp.neighbors(adata)
         ck = cr.kernels.ConnectivityKernel(adata)
         ck.compute_transition_matrix()
@@ -3359,15 +3384,15 @@ def cellrank_terminal_states(
     adata.write_h5ad(f"{save_path}/cellrank_terminal.h5ad", compression="gzip")
 
     # Get terminal state info
-    terminal_states = adata.obs['terminal_states'].dropna().unique().tolist() if 'terminal_states' in adata.obs else []
+    terminal_states = adata.obs["terminal_states"].dropna().unique().tolist() if "terminal_states" in adata.obs else []
 
-    result = f"CellRank terminal state analysis complete:\n"
+    result = "CellRank terminal state analysis complete:\n"
     result += f"  - Method: {'Velocity kernel' if use_velocity else 'Connectivity kernel'}\n"
     result += f"  - Terminal states found: {len(terminal_states)}\n"
     if terminal_states:
         result += f"  - States: {terminal_states}\n"
     result += f"  - Saved to {save_path}/cellrank_terminal.h5ad\n"
-    result += f"\nNext steps: Use cellrank_fate_probabilities to compute fate maps"
+    result += "\nNext steps: Use cellrank_fate_probabilities to compute fate maps"
 
     print(result)
     return result
@@ -3393,16 +3418,15 @@ def cellrank_fate_probabilities(
     save_path = save_path or _config["save_path"]
     import cellrank as cr
     import scanpy as sc
-    import matplotlib.pyplot as plt
 
     adata = sc.read_h5ad(adata_path)
 
     # Check terminal states exist
-    if 'terminal_states' not in adata.obs:
+    if "terminal_states" not in adata.obs:
         return "ERROR: Terminal states not found. Run cellrank_terminal_states first."
 
     # Recreate estimator
-    if 'velocity' in adata.layers:
+    if "velocity" in adata.layers:
         vk = cr.kernels.VelocityKernel(adata)
         vk.compute_transition_matrix()
         kernel = vk
@@ -3415,7 +3439,7 @@ def cellrank_fate_probabilities(
     g.compute_schur(n_components=20)
 
     # Set terminal states from previous analysis
-    terminal_states = adata.obs['terminal_states'].dropna().unique().tolist()
+    terminal_states = adata.obs["terminal_states"].dropna().unique().tolist()
     g.set_terminal_states(terminal_states)
 
     # Compute fate probabilities
@@ -3424,14 +3448,14 @@ def cellrank_fate_probabilities(
     os.makedirs(save_path, exist_ok=True)
 
     # Save fate probabilities
-    if hasattr(g, 'fate_probabilities') and g.fate_probabilities is not None:
+    if hasattr(g, "fate_probabilities") and g.fate_probabilities is not None:
         fate_df = g.fate_probabilities.to_frame()
         fate_df.to_csv(f"{save_path}/fate_probabilities.csv")
 
     # Save updated adata
     adata.write_h5ad(f"{save_path}/cellrank_fate.h5ad", compression="gzip")
 
-    result = f"Fate probabilities computed:\n"
+    result = "Fate probabilities computed:\n"
     result += f"  - Terminal states: {terminal_states}\n"
     result += f"  - Fate probabilities saved to: {save_path}/fate_probabilities.csv\n"
     result += f"  - Data saved to: {save_path}/cellrank_fate.h5ad"
@@ -3458,8 +3482,8 @@ def paga_trajectory(
     - Data must have the specified groups column
     """
     save_path = save_path or _config["save_path"]
-    import scanpy as sc
     import matplotlib.pyplot as plt
+    import scanpy as sc
 
     adata = sc.read_h5ad(adata_path)
 
@@ -3468,7 +3492,7 @@ def paga_trajectory(
         return f"ERROR: Groups key '{groups_key}' not found. Available: {list(adata.obs.columns)}"
 
     # Compute neighbors if not present
-    if 'neighbors' not in adata.uns:
+    if "neighbors" not in adata.uns:
         sc.pp.pca(adata)
         sc.pp.neighbors(adata)
 
@@ -3480,7 +3504,7 @@ def paga_trajectory(
     # Plot PAGA
     fig, ax = plt.subplots(figsize=(10, 8))
     sc.pl.paga(adata, threshold=threshold, ax=ax, show=False)
-    plt.savefig(f"{save_path}/paga_graph.png", dpi=150, bbox_inches='tight')
+    plt.savefig(f"{save_path}/paga_graph.png", dpi=150, bbox_inches="tight")
     plt.close()
 
     # Compute diffusion pseudotime if root specified
@@ -3490,19 +3514,19 @@ def paga_trajectory(
         if len(root_cells) == 0:
             return f"ERROR: Root group '{root_group}' not found. Available: {adata.obs[groups_key].unique().tolist()}"
 
-        adata.uns['iroot'] = adata.obs_names.get_loc(root_cells[0])
+        adata.uns["iroot"] = adata.obs_names.get_loc(root_cells[0])
         sc.tl.diffmap(adata)
         sc.tl.dpt(adata)
 
         # Plot pseudotime
-        if 'X_umap' in adata.obsm:
+        if "X_umap" in adata.obsm:
             fig, ax = plt.subplots(figsize=(10, 8))
-            sc.pl.umap(adata, color='dpt_pseudotime', ax=ax, show=False)
-            plt.savefig(f"{save_path}/pseudotime_umap.png", dpi=150, bbox_inches='tight')
+            sc.pl.umap(adata, color="dpt_pseudotime", ax=ax, show=False)
+            plt.savefig(f"{save_path}/pseudotime_umap.png", dpi=150, bbox_inches="tight")
             plt.close()
 
     # Save PAGA adjacency
-    paga_adj = adata.uns['paga']['connectivities'].toarray()
+    paga_adj = adata.uns["paga"]["connectivities"].toarray()
     groups = adata.obs[groups_key].cat.categories.tolist()
     paga_df = pd.DataFrame(paga_adj, index=groups, columns=groups)
     paga_df.to_csv(f"{save_path}/paga_adjacency.csv")
@@ -3510,7 +3534,7 @@ def paga_trajectory(
     # Save results
     adata.write_h5ad(f"{save_path}/paga_result.h5ad", compression="gzip")
 
-    result = f"PAGA trajectory analysis complete:\n"
+    result = "PAGA trajectory analysis complete:\n"
     result += f"  - Groups: {groups_key} ({len(groups)} groups)\n"
     result += f"  - PAGA graph: {save_path}/paga_graph.png\n"
     result += f"  - Adjacency matrix: {save_path}/paga_adjacency.csv\n"
@@ -3527,14 +3551,15 @@ def paga_trajectory(
 # Multimodal Integration: scvi-tools
 # =============================================================================
 
+
 @tool
 def totalvi_integration(
     adata_path: Annotated[str, Field(description="Path to h5ad file with RNA and protein (CITE-seq) data")],
     protein_layer: Annotated[str, Field(description="Key in adata.obsm for protein counts")] = "protein_expression",
     n_latent: Annotated[int, Field(description="Dimensionality of latent space")] = 20,
     max_epochs: Annotated[int, Field(description="Maximum training epochs")] = 400,
-    batch_key: Annotated[str, Field(description="Batch column for integration (optional)")] = None,
-    save_path: Annotated[str, Field(description="Directory to save results")] = None,
+    batch_key: Annotated[str, Field(description="Batch column for integration (optional)")] | None = None,
+    save_path: Annotated[str, Field(description="Directory to save results")] | None = None,
 ) -> str:
     """Integrate RNA and protein data using totalVI (CITE-seq analysis).
 
@@ -3551,8 +3576,8 @@ def totalvi_integration(
     - Normalized RNA values
     """
     save_path = save_path or _config["save_path"]
-    import scvi
     import scanpy as sc
+    import scvi
 
     adata = sc.read_h5ad(adata_path)
 
@@ -3577,19 +3602,19 @@ def totalvi_integration(
     model.train(max_epochs=max_epochs, early_stopping=True)
 
     # Get latent representation
-    adata.obsm['X_totalVI'] = model.get_latent_representation()
+    adata.obsm["X_totalVI"] = model.get_latent_representation()
 
     # Get normalized values
     rna_norm, protein_norm = model.get_normalized_expression(return_mean=True)
-    adata.layers['totalvi_rna_normalized'] = rna_norm
+    adata.layers["totalvi_rna_normalized"] = rna_norm
     # Convert protein_norm to numpy array to avoid column name issues
-    if hasattr(protein_norm, 'values'):
-        adata.obsm['totalvi_protein_normalized'] = protein_norm.values
+    if hasattr(protein_norm, "values"):
+        adata.obsm["totalvi_protein_normalized"] = protein_norm.values
     else:
-        adata.obsm['totalvi_protein_normalized'] = protein_norm
+        adata.obsm["totalvi_protein_normalized"] = protein_norm
 
     # Compute UMAP on totalVI latent space
-    sc.pp.neighbors(adata, use_rep='X_totalVI')
+    sc.pp.neighbors(adata, use_rep="X_totalVI")
     sc.tl.umap(adata)
 
     os.makedirs(save_path, exist_ok=True)
@@ -3600,7 +3625,7 @@ def totalvi_integration(
     # Save results
     adata.write_h5ad(f"{save_path}/totalvi_result.h5ad", compression="gzip")
 
-    result = f"totalVI integration complete:\n"
+    result = "totalVI integration complete:\n"
     result += f"  - Cells: {adata.n_obs}\n"
     result += f"  - RNA genes: {adata.n_vars}\n"
     result += f"  - Proteins: {adata.obsm[protein_layer].shape[1]}\n"
@@ -3616,11 +3641,11 @@ def totalvi_integration(
 @tool
 def multivi_integration(
     adata_path: Annotated[str, Field(description="Path to h5ad file with RNA and ATAC data")],
-    atac_layer: Annotated[str, Field(description="Key in adata.obsm or layer for ATAC peaks")] = None,
+    atac_layer: Annotated[str, Field(description="Key in adata.obsm or layer for ATAC peaks")] | None = None,
     n_latent: Annotated[int, Field(description="Dimensionality of latent space")] = 20,
     max_epochs: Annotated[int, Field(description="Maximum training epochs")] = 500,
-    batch_key: Annotated[str, Field(description="Batch column for integration (optional)")] = None,
-    save_path: Annotated[str, Field(description="Directory to save results")] = None,
+    batch_key: Annotated[str, Field(description="Batch column for integration (optional)")] | None = None,
+    save_path: Annotated[str, Field(description="Directory to save results")] | None = None,
 ) -> str:
     """Integrate RNA and ATAC data using MultiVI (multiome analysis).
 
@@ -3637,8 +3662,8 @@ def multivi_integration(
     - Imputed expression for ATAC-only cells
     """
     save_path = save_path or _config["save_path"]
-    import scvi
     import scanpy as sc
+    import scvi
 
     adata = sc.read_h5ad(adata_path)
 
@@ -3656,10 +3681,10 @@ def multivi_integration(
     model.train(max_epochs=max_epochs, early_stopping=True)
 
     # Get latent representation
-    adata.obsm['X_multivi'] = model.get_latent_representation()
+    adata.obsm["X_multivi"] = model.get_latent_representation()
 
     # Compute UMAP on MultiVI latent space
-    sc.pp.neighbors(adata, use_rep='X_multivi')
+    sc.pp.neighbors(adata, use_rep="X_multivi")
     sc.tl.umap(adata)
 
     os.makedirs(save_path, exist_ok=True)
@@ -3670,7 +3695,7 @@ def multivi_integration(
     # Save results
     adata.write_h5ad(f"{save_path}/multivi_result.h5ad", compression="gzip")
 
-    result = f"MultiVI integration complete:\n"
+    result = "MultiVI integration complete:\n"
     result += f"  - Cells: {adata.n_obs}\n"
     result += f"  - Features: {adata.n_vars}\n"
     result += f"  - Latent dims: {n_latent}\n"
@@ -3685,10 +3710,11 @@ def multivi_integration(
 def mofa_integration(
     adata_path: Annotated[str, Field(description="Path to h5ad file OR comma-separated paths for multiple modalities")],
     n_factors: Annotated[int, Field(description="Number of latent factors to learn")] = 10,
-    modality_key: Annotated[str, Field(description="Column in adata.var indicating modality (if single file)")] = None,
-    groups_key: Annotated[str, Field(description="Column in adata.obs for sample/group structure")] = None,
+    modality_key: Annotated[str, Field(description="Column in adata.var indicating modality (if single file)")]
+    | None = None,
+    groups_key: Annotated[str, Field(description="Column in adata.obs for sample/group structure")] | None = None,
     max_iterations: Annotated[int, Field(description="Maximum training iterations")] = 1000,
-    save_path: Annotated[str, Field(description="Directory to save results")] = None,
+    save_path: Annotated[str, Field(description="Directory to save results")] | None = None,
 ) -> str:
     """Perform multi-omics factor analysis using MOFA+.
 
@@ -3706,12 +3732,12 @@ def mofa_integration(
     - Variance explained per factor per modality
     """
     save_path = save_path or _config["save_path"]
-    from mofapy2.run.entry_point import entry_point
     import scanpy as sc
+    from mofapy2.run.entry_point import entry_point
 
     # Check if multiple files
-    if ',' in adata_path:
-        paths = [p.strip() for p in adata_path.split(',')]
+    if "," in adata_path:
+        paths = [p.strip() for p in adata_path.split(",")]
         adatas = [sc.read_h5ad(p) for p in paths]
         modality_names = [f"modality_{i}" for i in range(len(adatas))]
     else:
@@ -3729,14 +3755,14 @@ def mofa_integration(
     # Prepare data for MOFA
     # MOFA expects: data[modality][group] = matrix
     data = {}
-    for mod_name, ad in zip(modality_names, adatas):
+    for mod_name, ad in zip(modality_names, adatas, strict=False):
         if groups_key and groups_key in ad.obs:
             data[mod_name] = {}
             for group in ad.obs[groups_key].unique():
                 mask = ad.obs[groups_key] == group
-                data[mod_name][group] = ad[mask].X.toarray() if hasattr(ad.X, 'toarray') else ad.X
+                data[mod_name][group] = ad[mask].X.toarray() if hasattr(ad.X, "toarray") else ad.X
         else:
-            data[mod_name] = {"group1": ad.X.toarray() if hasattr(ad.X, 'toarray') else ad.X}
+            data[mod_name] = {"group1": ad.X.toarray() if hasattr(ad.X, "toarray") else ad.X}
 
     # Initialize MOFA
     ent = entry_point()
@@ -3769,10 +3795,7 @@ def mofa_integration(
     var_explained = ent.model.calculate_variance_explained()
 
     # Save factors
-    factors_df = pd.DataFrame(
-        all_factors,
-        columns=[f'Factor_{i+1}' for i in range(n_factors)]
-    )
+    factors_df = pd.DataFrame(all_factors, columns=pd.Index([f"Factor_{i + 1}" for i in range(n_factors)]))
     factors_df.to_csv(f"{save_path}/mofa_factors.csv")
 
     # Save variance explained (handle 3D output: groups x views x factors)
@@ -3782,17 +3805,17 @@ def mofa_integration(
             var_explained_2d = var_explained[0]  # Take first group
             var_df = pd.DataFrame(
                 var_explained_2d,
-                index=[f'view_{i}' for i in range(var_explained_2d.shape[0])],
-                columns=[f'Factor_{i+1}' for i in range(var_explained_2d.shape[1])]
+                index=pd.Index([f"view_{i}" for i in range(var_explained_2d.shape[0])]),
+                columns=pd.Index([f"Factor_{i + 1}" for i in range(var_explained_2d.shape[1])]),
             )
         else:
             var_df = pd.DataFrame(var_explained)
         var_df.to_csv(f"{save_path}/mofa_variance_explained.csv")
-    except Exception as e:
+    except Exception:
         # If variance explained fails, just save factors
         pass
 
-    result = f"MOFA+ analysis complete:\n"
+    result = "MOFA+ analysis complete:\n"
     result += f"  - Modalities: {modality_names}\n"
     result += f"  - Factors: {n_factors}\n"
     result += f"  - Samples: {all_factors.shape[0]}\n"

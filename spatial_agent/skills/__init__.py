@@ -3,7 +3,7 @@
 # Skills are loaded as markdown files from this directory
 # Available skills:
 # - annotation: Cell type annotation for single-cell platforms
-# - cell_cell_communication: Ligand-receptor interaction analysis  
+# - cell_cell_communication: Ligand-receptor interaction analysis
 # - cell_deconvolution: Spot-based cell type proportion estimation
 # - panel_design: Gene panel design for targeted platforms
 # - spatial_mapping: Mapping scRNA-seq to spatial data

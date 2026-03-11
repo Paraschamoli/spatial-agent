@@ -17,14 +17,14 @@ from urllib.parse import urljoin
 from langchain_core.tools import tool
 from pydantic import Field
 
-
 # =============================================================================
 # Tool 1: Query PubMed
 # =============================================================================
 
+
 def _strip_html_tags(text: str) -> str:
     """Remove HTML tags from text (e.g., <sup>, <sub>, <i>)."""
-    return re.sub(r'<[^>]+>', '', text)
+    return re.sub(r"<[^>]+>", "", text)
 
 
 @tool
@@ -116,6 +116,7 @@ def query_pubmed(
 # Tool 2: Query arXiv
 # =============================================================================
 
+
 @tool
 def query_arxiv(
     query: Annotated[str, Field(description="Search query string for arXiv")],
@@ -134,24 +135,22 @@ def query_arxiv(
 
     try:
         client = arxiv.Client()
-        search = arxiv.Search(
-            query=query,
-            max_results=max_papers,
-            sort_by=arxiv.SortCriterion.Relevance
-        )
+        search = arxiv.Search(query=query, max_results=max_papers, sort_by=arxiv.SortCriterion.Relevance)
 
         results = []
         for i, paper in enumerate(client.results(search), 1):
             title = paper.title
             summary = paper.summary
-            arxiv_id = paper.entry_id.split('/')[-1]
-            published = paper.published.strftime('%Y-%m-%d') if paper.published else 'N/A'
+            arxiv_id = paper.entry_id.split("/")[-1]
+            published = paper.published.strftime("%Y-%m-%d") if paper.published else "N/A"
 
             # Truncate long summaries (1500 chars captures most full abstracts)
             if summary and len(summary) > 1500:
                 summary = summary[:1500] + "..."
 
-            results.append(f"Paper {i}:\n  Title: {title}\n  arXiv ID: {arxiv_id}\n  Published: {published}\n  Summary: {summary}")
+            results.append(
+                f"Paper {i}:\n  Title: {title}\n  arXiv ID: {arxiv_id}\n  Published: {published}\n  Summary: {summary}"
+            )
 
         if results:
             return f"Found {len(results)} papers on arXiv:\n\n" + "\n\n".join(results)
@@ -199,6 +198,7 @@ def query_arxiv(
 # Tool 4: Semantic Scholar Search
 # =============================================================================
 
+
 @tool
 def search_semantic_scholar(
     query: Annotated[str, Field(description="Search query string for academic papers")],
@@ -222,7 +222,7 @@ def search_semantic_scholar(
         params = {
             "query": query,
             "limit": max_papers,
-            "fields": "paperId,title,abstract,authors,year,citationCount,journal,url"
+            "fields": "paperId,title,abstract,authors,year,citationCount,journal,url",
         }
         headers = {"User-Agent": "SpatialAgent/1.0"}
 
@@ -369,6 +369,7 @@ def search_semantic_scholar(
 # Verdict: Our tool is faster and works on more sites (including PubMed).
 # =============================================================================
 
+
 @tool
 def extract_url_content(
     url: Annotated[str, Field(description="URL of the webpage to extract content from")],
@@ -431,6 +432,7 @@ def extract_url_content(
 # Tool 6: Extract PDF Content
 # =============================================================================
 
+
 @tool
 def extract_pdf_content(
     url: Annotated[str, Field(description="URL of the PDF file to extract text from")],
@@ -442,8 +444,8 @@ def extract_pdf_content(
     Examples:
         - extract_pdf_content({"url": "https://example.com/paper.pdf"})
     """
-    import requests
     import PyPDF2
+    import requests
 
     try:
         # Check if the URL ends with .pdf
@@ -501,6 +503,7 @@ def extract_pdf_content(
 # Tool 7: Fetch Supplementary Info from DOI
 # =============================================================================
 
+
 @tool
 def fetch_supplementary_from_doi(
     doi: Annotated[str, Field(description="The paper DOI (e.g., '10.1038/s41586-021-03775-x')")],
@@ -515,8 +518,9 @@ def fetch_supplementary_from_doi(
         - fetch_supplementary_from_doi({"doi": "10.1038/s41586-021-03775-x"})
         - fetch_supplementary_from_doi({"doi": "10.1016/j.cell.2021.04.048"})
     """
-    import requests
     import time
+
+    import requests
     from bs4 import BeautifulSoup
 
     research_log = []
@@ -533,7 +537,7 @@ def fetch_supplementary_from_doi(
             if response.status_code < 500:
                 break
             if attempt < max_retries - 1:
-                wait_time = 2 ** attempt
+                wait_time = 2**attempt
                 time.sleep(wait_time)
 
         if response.status_code != 200:
@@ -548,9 +552,14 @@ def fetch_supplementary_from_doi(
         # === Extract Paper Title ===
         title = None
         title_selectors = [
-            "h1.article-title", "h1.c-article-title", "h1.citation__title",
-            "h1.core-title", "h1#title", "meta[name='citation_title']",
-            "meta[name='dc.title']", "title"
+            "h1.article-title",
+            "h1.c-article-title",
+            "h1.citation__title",
+            "h1.core-title",
+            "h1#title",
+            "meta[name='citation_title']",
+            "meta[name='dc.title']",
+            "title",
         ]
         for selector in title_selectors:
             if selector.startswith("meta"):
@@ -569,9 +578,15 @@ def fetch_supplementary_from_doi(
         # === Extract Abstract ===
         abstract = None
         abstract_selectors = [
-            "section#abstract", "div#abstract", "div.abstract", "section.abstract",
-            "div[class*='abstract']", "p.abstract", "div.c-article-section__content",
-            "meta[name='citation_abstract']", "meta[name='dc.description']"
+            "section#abstract",
+            "div#abstract",
+            "div.abstract",
+            "section.abstract",
+            "div[class*='abstract']",
+            "p.abstract",
+            "div.c-article-section__content",
+            "meta[name='citation_abstract']",
+            "meta[name='dc.description']",
         ]
         for selector in abstract_selectors:
             if selector.startswith("meta"):
@@ -590,8 +605,12 @@ def fetch_supplementary_from_doi(
         # === Extract Full Text Sections (Results, Methods, etc.) ===
         full_text_sections = []
         section_selectors = [
-            "section.c-article-section", "div.article-section", "section[id*='sec']",
-            "div.section", "div.NLM_sec", "div[class*='section']"
+            "section.c-article-section",
+            "div.article-section",
+            "section[id*='sec']",
+            "div.section",
+            "div.NLM_sec",
+            "div[class*='section']",
         ]
         for selector in section_selectors:
             sections = soup.select(selector)
@@ -605,7 +624,7 @@ def fetch_supplementary_from_doi(
                 break
 
         if full_text_sections:
-            research_log.append(f"\n=== FULL TEXT EXCERPTS ===")
+            research_log.append("\n=== FULL TEXT EXCERPTS ===")
             research_log.extend(full_text_sections[:5])  # Limit output
 
         # === Check for PMC Full Text ===
@@ -629,30 +648,35 @@ def fetch_supplementary_from_doi(
                     supplementary_links.append(full_url)
 
         if supplementary_links:
-            research_log.append(f"\n=== SUPPLEMENTARY MATERIALS ===")
+            research_log.append("\n=== SUPPLEMENTARY MATERIALS ===")
             for link in supplementary_links[:5]:
                 research_log.append(f"- {link}")
 
         # === Summary ===
         if not abstract and not full_text_sections:
-            research_log.append(f"\n[WARNING] Could not extract paper content. Try web_search with the DOI for more details.")
+            research_log.append(
+                "\n[WARNING] Could not extract paper content. Try web_search with the DOI for more details."
+            )
 
         return "\n".join(research_log)
 
     except Exception as e:
-        return f"Error fetching paper content: {e}\n\n[TIP] Try using web_search with query: '{doi} [specific keywords]'"
+        return (
+            f"Error fetching paper content: {e}\n\n[TIP] Try using web_search with query: '{doi} [specific keywords]'"
+        )
 
 
 # =============================================================================
 # Tool 8: Provider Web Search (Anthropic, OpenAI, Google)
 # =============================================================================
 
+
 @tool
 def web_search(
     query: str,
-    model: str = None,
+    model: str | None = None,
     max_results: int = 5,
-    allowed_domains: list = None,
+    allowed_domains: list | None = None,
 ) -> dict:
     """Search the web using server-side web search from Anthropic, OpenAI, or Google.
 
@@ -684,7 +708,6 @@ def web_search(
     Note:
         For academic paper search, use search_semantic_scholar() or query_pubmed() instead.
     """
-    import os
 
     # Detect provider from model name
     provider = None
@@ -707,13 +730,13 @@ def web_search(
     if not provider:
         if os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
             provider = "google"
-            model = None  # Don't pass local LLM model name to Google
+            model = ""  # Don't pass local LLM model name to Google
         elif os.environ.get("OPENAI_API_KEY"):
             provider = "openai"
-            model = None
+            model = ""
         elif os.environ.get("ANTHROPIC_API_KEY"):
             provider = "anthropic"
-            model = None
+            model = ""
         else:
             return {
                 "provider": None,
@@ -721,18 +744,12 @@ def web_search(
                 "response": None,
                 "citations": [],
                 "error": "Cannot determine web search provider. Either: "
-                         "(1) Pass a model name like 'claude-*', 'gpt-*', or 'gemini-*', "
-                         "(2) Set DEFAULT_WEB_SEARCH_PROVIDER env var, or "
-                         "(3) Set GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY."
+                "(1) Pass a model name like 'claude-*', 'gpt-*', or 'gemini-*', "
+                "(2) Set DEFAULT_WEB_SEARCH_PROVIDER env var, or "
+                "(3) Set GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY.",
             }
 
-    result = {
-        "provider": provider,
-        "model": model,
-        "response": None,
-        "citations": [],
-        "error": None
-    }
+    result = {"provider": provider, "model": model, "response": None, "citations": [], "error": None}
 
     try:
         if provider == "anthropic":
@@ -751,9 +768,9 @@ def web_search(
 
 def _anthropic_web_search(
     query: str,
-    model: str = None,
+    model: str | None = None,
     max_results: int = 5,
-    allowed_domains: list = None,
+    allowed_domains: list | None = None,
 ) -> dict:
     """Execute web search using Anthropic's server-side tool."""
     import anthropic
@@ -762,19 +779,12 @@ def _anthropic_web_search(
     model = model or "claude-sonnet-4-5-20250929"
 
     # Build tool config
-    tool_config = {
-        "type": "web_search_20250305",
-        "name": "web_search",
-        "max_uses": max_results
-    }
+    tool_config = {"type": "web_search_20250305", "name": "web_search", "max_uses": max_results}
     if allowed_domains:
         tool_config["allowed_domains"] = allowed_domains
 
     response = client.messages.create(
-        model=model,
-        max_tokens=2048,
-        tools=[tool_config],
-        messages=[{"role": "user", "content": query}]
+        model=model, max_tokens=2048, tools=[tool_config], messages=[{"role": "user", "content": query}]
     )
 
     # Extract response text and citations
@@ -782,22 +792,22 @@ def _anthropic_web_search(
     citations = []
 
     for block in response.content:
-        if hasattr(block, 'text'):
+        if hasattr(block, "text"):
             text_parts.append(block.text)
             # Extract citations if present
-            if hasattr(block, 'citations') and block.citations:
+            if hasattr(block, "citations") and block.citations:
                 for cite in block.citations:
-                    if hasattr(cite, 'url'):
+                    if hasattr(cite, "url"):
                         citations.append({
                             "url": cite.url,
-                            "title": getattr(cite, 'title', ''),
-                            "text": getattr(cite, 'cited_text', '')[:200] if hasattr(cite, 'cited_text') else ''
+                            "title": getattr(cite, "title", ""),
+                            "text": getattr(cite, "cited_text", "")[:200] if hasattr(cite, "cited_text") else "",
                         })
 
     # Get search count from usage
     search_count = 0
-    if hasattr(response, 'usage') and hasattr(response.usage, 'server_tool_use'):
-        search_count = getattr(response.usage.server_tool_use, 'web_search_requests', 0)
+    if hasattr(response, "usage") and hasattr(response.usage, "server_tool_use"):
+        search_count = getattr(response.usage.server_tool_use, "web_search_requests", 0)
 
     return {
         "provider": "anthropic",
@@ -805,14 +815,14 @@ def _anthropic_web_search(
         "response": "\n".join(text_parts),
         "citations": citations,
         "searches_used": search_count,
-        "error": None
+        "error": None,
     }
 
 
 def _openai_web_search(
     query: str,
-    model: str = None,
-    allowed_domains: list = None,
+    model: str | None = None,
+    allowed_domains: list | None = None,
 ) -> dict:
     """Execute web search using OpenAI's Responses API."""
     from openai import OpenAI
@@ -825,42 +835,33 @@ def _openai_web_search(
     if allowed_domains:
         tool_config["filters"] = {"allowed_domains": allowed_domains}
 
-    response = client.responses.create(
-        model=model,
-        tools=[tool_config],
-        input=query
-    )
+    response = client.responses.create(model=model, tools=[tool_config], input=query)
 
     # Extract citations from annotations
     citations = []
-    if hasattr(response, 'output') and response.output:
+    if hasattr(response, "output") and response.output:
         for item in response.output:
-            if hasattr(item, 'content') and item.content:
+            if hasattr(item, "content") and item.content:
                 for content in item.content:
-                    if hasattr(content, 'annotations') and content.annotations:
+                    if hasattr(content, "annotations") and content.annotations:
                         for ann in content.annotations:
-                            if hasattr(ann, 'url'):
-                                citations.append({
-                                    "url": ann.url,
-                                    "title": getattr(ann, 'title', ''),
-                                    "text": ""
-                                })
+                            if hasattr(ann, "url"):
+                                citations.append({"url": ann.url, "title": getattr(ann, "title", ""), "text": ""})
 
     return {
         "provider": "openai",
         "model": model,
-        "response": response.output_text if hasattr(response, 'output_text') else str(response),
+        "response": response.output_text if hasattr(response, "output_text") else str(response),
         "citations": citations,
-        "error": None
+        "error": None,
     }
 
 
 def _google_web_search(
     query: str,
-    model: str = None,
+    model: str | None = None,
 ) -> dict:
     """Execute web search using Google's Gemini with Google Search."""
-    import os
     from google import genai
     from google.genai import types
 
@@ -871,37 +872,35 @@ def _google_web_search(
     response = client.models.generate_content(
         model=model,
         contents=query,
-        config=types.GenerateContentConfig(
-            tools=[types.Tool(google_search=types.GoogleSearch())]
-        )
+        config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())]),
     )
 
     # Extract grounding metadata for citations
     citations = []
     search_queries = []
 
-    if hasattr(response, 'candidates') and response.candidates:
+    if hasattr(response, "candidates") and response.candidates:
         candidate = response.candidates[0]
-        if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+        if hasattr(candidate, "grounding_metadata") and candidate.grounding_metadata:
             gm = candidate.grounding_metadata
             # Get search queries used
-            if hasattr(gm, 'web_search_queries'):
+            if hasattr(gm, "web_search_queries"):
                 search_queries = list(gm.web_search_queries) if gm.web_search_queries else []
             # Get grounding chunks (sources)
-            if hasattr(gm, 'grounding_chunks') and gm.grounding_chunks:
+            if hasattr(gm, "grounding_chunks") and gm.grounding_chunks:
                 for chunk in gm.grounding_chunks:
-                    if hasattr(chunk, 'web') and chunk.web:
+                    if hasattr(chunk, "web") and chunk.web:
                         citations.append({
-                            "url": getattr(chunk.web, 'uri', ''),
-                            "title": getattr(chunk.web, 'title', ''),
-                            "text": ""
+                            "url": getattr(chunk.web, "uri", ""),
+                            "title": getattr(chunk.web, "title", ""),
+                            "text": "",
                         })
 
     return {
         "provider": "google",
         "model": model,
-        "response": response.text if hasattr(response, 'text') else str(response),
+        "response": response.text if hasattr(response, "text") else str(response),
         "citations": citations,
         "search_queries": search_queries,
-        "error": None
+        "error": None,
     }

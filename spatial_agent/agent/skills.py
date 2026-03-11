@@ -5,9 +5,9 @@ Manages workflow templates (skills) for common spatial transcriptomics tasks.
 Templates are markdown files that guide the agent through standard workflows.
 """
 
-import os
 import logging
-from typing import Dict, List, Optional
+import os
+
 from langchain_core.prompts import ChatPromptTemplate
 
 
@@ -22,14 +22,14 @@ class SkillManager:
             skills_dir: Directory containing skill template files (.md)
         """
         self.skills_dir = skills_dir
-        self.skills: Dict[str, str] = {}
+        self.skills: dict[str, str] = {}
         self.llm = None
 
         # Cache for performance
         self.last_task_query = None
         self.last_selected_skill = None
 
-    def load_skills(self) -> Dict[str, str]:
+    def load_skills(self) -> dict[str, str]:
         """
         Load all skill templates from skills directory.
 
@@ -44,27 +44,27 @@ class SkillManager:
             return {}
 
         for filename in os.listdir(self.skills_dir):
-            if filename.endswith('.md'):
+            if filename.endswith(".md"):
                 skill_path = os.path.join(self.skills_dir, filename)
                 skill_name = filename[:-3]  # Remove .md extension
-                
+
                 try:
                     # Try UTF-8 encoding first, then fallback to other encodings
-                    with open(skill_path, 'r', encoding='utf-8') as f:
+                    with open(skill_path, encoding="utf-8") as f:
                         content = f.read()
                     self.skills[skill_name] = content
                     logging.info(f"Loaded skill: {skill_name}")
                 except UnicodeDecodeError:
                     try:
                         # Try with different encoding
-                        with open(skill_path, 'r', encoding='latin-1') as f:
+                        with open(skill_path, encoding="latin-1") as f:
                             content = f.read()
                         self.skills[skill_name] = content
                         logging.info(f"Loaded skill: {skill_name} (latin-1 encoding)")
                     except Exception as e:
-                        logging.error(f"Could not load skill {skill_name}: {e}")
+                        logging.exception(f"Could not load skill {skill_name}: {e}")
                 except Exception as e:
-                    logging.error(f"Could not load skill {skill_name}: {e}")
+                    logging.exception(f"Could not load skill {skill_name}: {e}")
 
         return self.skills
 
@@ -80,12 +80,13 @@ class SkillManager:
         """Remove MCQ options (A., B., etc.) to prevent long sequences from confusing skill selector."""
         if not self.REMOVE_MCQ_OPTIONS:
             return task_query
-        if '\nOptions:' in task_query:
-            return task_query.split('\nOptions:', 1)[0].strip()
+        if "\nOptions:" in task_query:
+            return task_query.split("\nOptions:", 1)[0].strip()
         return task_query
+
     # === End MCQ Options Removal ===
 
-    def select_skill(self, task_query: str, num_skills: int = 1) -> List[str]:
+    def select_skill(self, task_query: str, num_skills: int = 1) -> list[str]:
         """
         Select the most relevant skill template(s) for a task query.
 
@@ -98,7 +99,7 @@ class SkillManager:
         """
         # Return cached if same query
         if task_query == self.last_task_query and self.last_selected_skill:
-            logging.info(f"Using cached skill selection")
+            logging.info("Using cached skill selection")
             return self.last_selected_skill
 
         if not self.skills:
@@ -119,7 +120,9 @@ class SkillManager:
         skill_names = list(self.skills.keys())
 
         prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a workflow matching system for spatial transcriptomics and molecular biology analysis.
+            (
+                "system",
+                """You are a workflow matching system for spatial transcriptomics and molecular biology analysis.
 
 Given a user task, decide if it needs workflow templates, and if so, select up to {num_skills} most relevant ones.
 
@@ -168,8 +171,9 @@ CRITICAL: You MUST output ONLY a template name from the list above, or NO_MATCH.
 CORRECT outputs: "database_query" or "annotation" or "NO_MATCH"
 WRONG outputs: "I need to search..." or "This question asks about..." or any explanation
 
-For ANY question about gene sets, MSigDB, C6, oncogenic signatures, miRNA targets, variants, or databases → output: database_query"""),
-            ("user", "Task: {task_query}")
+For ANY question about gene sets, MSigDB, C6, oncogenic signatures, miRNA targets, variants, or databases → output: database_query""",
+            ),
+            ("user", "Task: {task_query}"),
         ])
 
         try:
@@ -178,7 +182,7 @@ For ANY question about gene sets, MSigDB, C6, oncogenic signatures, miRNA target
                 "skill_names": ", ".join(skill_names),
                 # "task_query": task_query,  # Original: full query
                 "task_query": query_for_matching,  # MCQ options removed
-                "num_skills": num_skills
+                "num_skills": num_skills,
             })
 
             response = result.content.strip()
@@ -187,20 +191,21 @@ For ANY question about gene sets, MSigDB, C6, oncogenic signatures, miRNA target
             if len(response) > 30 and response not in skill_names and "NO_MATCH" not in response:
                 print(f"[SkillManager] Verbose response detected: '{response[:50]}...', retrying")
                 retry_prompt = ChatPromptTemplate.from_messages([
-                    ("system", """Output EXACTLY one skill name or NO_MATCH.
+                    (
+                        "system",
+                        """Output EXACTLY one skill name or NO_MATCH.
 
 database_query = MSigDB gene sets (C2/C5/C6/C7), miRNA targets (miRDB), ClinVar variants, P-HIPSter virus-host, GTRD TF targets, disease genes
 sequence_analysis = BLAST, restriction digest, primer design, cloning
 annotation = cell type annotation in spatial data
 NO_MATCH = simple questions, general queries
 
-For gene set membership, oncogenic signatures, miRNA, variant, or virus-host questions → database_query"""),
-                    ("user", "{task_query}\n\nOutput only: database_query, sequence_analysis, annotation, or NO_MATCH")
+For gene set membership, oncogenic signatures, miRNA, variant, or virus-host questions → database_query""",
+                    ),
+                    ("user", "{task_query}\n\nOutput only: database_query, sequence_analysis, annotation, or NO_MATCH"),
                 ])
                 retry_chain = retry_prompt | self.llm
-                retry_result = retry_chain.invoke({
-                    "task_query": query_for_matching
-                })
+                retry_result = retry_chain.invoke({"task_query": query_for_matching})
                 response = retry_result.content.strip()
 
             if response == "NO_MATCH" or "NO_MATCH" in response:
@@ -238,7 +243,7 @@ For gene set membership, oncogenic signatures, miRNA, variant, or virus-host que
                 response_lower = response.lower()
                 for skill_name in self.skills.keys():
                     # Check if skill name (with underscores or spaces) appears anywhere
-                    if skill_name in response_lower or skill_name.replace('_', ' ') in response_lower:
+                    if skill_name in response_lower or skill_name.replace("_", " ") in response_lower:
                         if skill_name not in seen_skills:
                             logging.info(f"Fallback: found skill '{skill_name}' in full response")
                             selected_contents.append(self.skills[skill_name])
@@ -254,10 +259,10 @@ For gene set membership, oncogenic signatures, miRNA, variant, or virus-host que
             return selected_contents
 
         except Exception as e:
-            logging.error(f"Skill selection failed: {e}")
+            logging.exception(f"Skill selection failed: {e}")
             return []
 
-    def format_skill_guidance(self, skill_content: Optional[str]) -> str:
+    def format_skill_guidance(self, skill_content: str | None) -> str:
         """
         Format skill template as guidance for agent.
 
@@ -289,7 +294,7 @@ Follow these steps systematically. You may adapt or extend the workflow based on
 
         return header + skill_content + footer
 
-    def extract_tools_from_skill(self, skill_content: str) -> List[str]:
+    def extract_tools_from_skill(self, skill_content: str) -> list[str]:
         """
         Extract tool names mentioned in a skill template.
 
@@ -305,12 +310,12 @@ Follow these steps systematically. You may adapt or extend the workflow based on
 
         # Pattern 1: Tool names in backticks (most common in our skills)
         # e.g., `query_pubmed`, `search_panglao`
-        backtick_pattern = r'`([a-z_]+)`'
+        backtick_pattern = r"`([a-z_]+)`"
         backtick_matches = re.findall(backtick_pattern, skill_content)
 
         # Pattern 2: Tool names after "Tool:" or "**Tool**:" markers
         # e.g., **Tool**: `search_panglao`
-        tool_marker_pattern = r'\*?\*?Tool\*?\*?:\s*`?([a-z_]+)`?'
+        tool_marker_pattern = r"\*?\*?Tool\*?\*?:\s*`?([a-z_]+)`?"
         tool_marker_matches = re.findall(tool_marker_pattern, skill_content, re.IGNORECASE)
 
         # Combine and deduplicate
@@ -318,22 +323,56 @@ Follow these steps systematically. You may adapt or extend the workflow based on
 
         # Filter: only keep names that look like tool names (contain underscore or known prefixes)
         tool_prefixes = [
-            'query_', 'search_', 'extract_', 'validate_', 'aggregate_',
-            'tangram_', 'cellphonedb_', 'liana_', 'squidpy_', 'scanpy_',
-            'scvelo_', 'cellrank_', 'paga_', 'totalvi_', 'multivi_', 'mofa_',
-            'destvi_', 'cell2location_', 'stereoscope_', 'gimvi_',
-            'spagcn_', 'graphst_', 'harmony_', 'run_utag_',
-            'preprocess_', 'annotate_', 'interpret_', 'summarize_', 'infer_',
-            'generate_', 'verify_', 'download_', 'fetch_'
+            "query_",
+            "search_",
+            "extract_",
+            "validate_",
+            "aggregate_",
+            "tangram_",
+            "cellphonedb_",
+            "liana_",
+            "squidpy_",
+            "scanpy_",
+            "scvelo_",
+            "cellrank_",
+            "paga_",
+            "totalvi_",
+            "multivi_",
+            "mofa_",
+            "destvi_",
+            "cell2location_",
+            "stereoscope_",
+            "gimvi_",
+            "spagcn_",
+            "graphst_",
+            "harmony_",
+            "run_utag_",
+            "preprocess_",
+            "annotate_",
+            "interpret_",
+            "summarize_",
+            "infer_",
+            "generate_",
+            "verify_",
+            "download_",
+            "fetch_",
         ]
 
         tool_names = []
         for name in all_matches:
             # Check if it starts with known prefix or contains underscore
-            if any(name.startswith(prefix) for prefix in tool_prefixes) or '_' in name:
+            if any(name.startswith(prefix) for prefix in tool_prefixes) or "_" in name:
                 # Exclude common non-tool patterns
-                if name not in ['cell_type', 'cell_types', 'gene_list', 'gene_panel',
-                               'save_path', 'data_path', 'file_path', 'adata_path']:
+                if name not in [
+                    "cell_type",
+                    "cell_types",
+                    "gene_list",
+                    "gene_panel",
+                    "save_path",
+                    "data_path",
+                    "file_path",
+                    "adata_path",
+                ]:
                     tool_names.append(name)
 
         return list(set(tool_names))
@@ -356,13 +395,13 @@ Follow these steps systematically. You may adapt or extend the workflow based on
         os.makedirs(save_path, exist_ok=True)
 
         # Clean skill name
-        skill_name = skill_name.replace(' ', '_').lower()
-        if not skill_name.endswith('.md'):
-            skill_name += '.md'
+        skill_name = skill_name.replace(" ", "_").lower()
+        if not skill_name.endswith(".md"):
+            skill_name += ".md"
 
         filepath = os.path.join(save_path, skill_name)
 
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             f.write(skill_content)
 
         logging.info(f"Exported new skill: {filepath}")
@@ -373,7 +412,7 @@ Follow these steps systematically. You may adapt or extend the workflow based on
 
         return filepath
 
-    def generate_skill_from_memory(self, llm, task_query: str, agent_messages: List, save_dir: str = None) -> str:
+    def generate_skill_from_memory(self, llm, task_query: str, agent_messages: list, save_dir: str = None) -> str:
         """
         Generate a new skill template from agent's conversation memory.
 
@@ -389,11 +428,12 @@ Follow these steps systematically. You may adapt or extend the workflow based on
         # Extract key actions from messages
         actions = []
         for msg in agent_messages:
-            content = msg.content if hasattr(msg, 'content') else str(msg)
+            content = msg.content if hasattr(msg, "content") else str(msg)
             # Look for tool calls and actions
-            if '<act>' in content:
+            if "<act>" in content:
                 import re
-                act_matches = re.findall(r'<act>(.*?)</act>', content, re.DOTALL)
+
+                act_matches = re.findall(r"<act>(.*?)</act>", content, re.DOTALL)
                 actions.extend(act_matches)
 
         if not actions:
@@ -402,7 +442,9 @@ Follow these steps systematically. You may adapt or extend the workflow based on
 
         # Use LLM to synthesize workflow template
         prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a workflow documentation expert for spatial transcriptomics analysis.
+            (
+                "system",
+                """You are a workflow documentation expert for spatial transcriptomics analysis.
 
 Given a user task and the sequence of actions taken by an agent, create a concise, reusable workflow template.
 
@@ -418,28 +460,35 @@ Plan:
 
     ...
 
-Be concise but complete. Focus on the workflow structure, not implementation details."""),
-            ("user", """Task: {task_query}
+Be concise but complete. Focus on the workflow structure, not implementation details.""",
+            ),
+            (
+                "user",
+                """Task: {task_query}
 
 Actions taken:
 {actions}
 
-Create a reusable workflow template:""")
+Create a reusable workflow template:""",
+            ),
         ])
 
         try:
             chain = prompt | llm
             result = chain.invoke({
                 "task_query": task_query,
-                "actions": "\n".join([f"- {act[:200]}..." for act in actions[:10]])
+                "actions": "\n".join([f"- {act[:200]}..." for act in actions[:10]]),
             })
 
             skill_content = result.content.strip()
 
             # Generate skill name from task
             name_prompt = ChatPromptTemplate.from_messages([
-                ("system", "Generate a short, descriptive name (2-4 words, underscores) for this workflow. Output only the name."),
-                ("user", skill_content[:300])
+                (
+                    "system",
+                    "Generate a short, descriptive name (2-4 words, underscores) for this workflow. Output only the name.",
+                ),
+                ("user", skill_content[:300]),
             ])
             name_chain = name_prompt | llm
             skill_name = name_chain.invoke({}).content.strip()
@@ -448,16 +497,16 @@ Create a reusable workflow template:""")
             return self.export_skill(skill_name, skill_content, save_dir)
 
         except Exception as e:
-            logging.error(f"Failed to generate skill from memory: {e}")
+            logging.exception(f"Failed to generate skill from memory: {e}")
             return None
 
-    def list_skills(self) -> List[str]:
+    def list_skills(self) -> list[str]:
         """List all available skill names."""
         if not self.skills:
             self.load_skills()
         return list(self.skills.keys())
 
-    def get_skill(self, skill_name: str) -> Optional[str]:
+    def get_skill(self, skill_name: str) -> str | None:
         """Get skill content by name."""
         if not self.skills:
             self.load_skills()

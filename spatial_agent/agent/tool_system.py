@@ -8,9 +8,11 @@ Supports Claude, OpenAI, Gemini with:
 """
 
 import json
-import numpy as np
-from typing import Any, Dict, List, Optional, Callable
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
+
+import numpy as np
 
 
 @dataclass
@@ -20,10 +22,10 @@ class Tool:
     name: str
     description: str
     function: Callable
-    input_schema: Dict[str, Any]
-    examples: List[Dict[str, Any]] = field(default_factory=list)
+    input_schema: dict[str, Any]
+    examples: list[dict[str, Any]] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary format."""
         return {
             "name": self.name,
@@ -49,7 +51,7 @@ class Tool:
 
         return "\n".join(parts)
 
-    def to_claude_format(self) -> Dict[str, Any]:
+    def to_claude_format(self) -> dict[str, Any]:
         """Convert to Claude tool format."""
         return {
             "name": self.name,
@@ -57,7 +59,7 @@ class Tool:
             "input_schema": self.input_schema,
         }
 
-    def to_openai_format(self) -> Dict[str, Any]:
+    def to_openai_format(self) -> dict[str, Any]:
         """Convert to OpenAI function calling format."""
         return {
             "type": "function",
@@ -65,10 +67,10 @@ class Tool:
                 "name": self.name,
                 "description": self.description,
                 "parameters": self.input_schema,
-            }
+            },
         }
 
-    def to_gemini_format(self) -> Dict[str, Any]:
+    def to_gemini_format(self) -> dict[str, Any]:
         """Convert to Gemini function calling format."""
         return {
             "name": self.name,
@@ -94,9 +96,9 @@ class ToolRegistry:
             embedding_model_name: Name of embedding model (default: qwen3-0.6b)
                                   See make_llm.LOCAL_EMBEDDING_MODELS for options.
         """
-        self.tools: Dict[str, Tool] = {}
-        self.embeddings: Optional[np.ndarray] = None
-        self.tool_names_ordered: List[str] = []
+        self.tools: dict[str, Tool] = {}
+        self.embeddings: np.ndarray | None = None
+        self.tool_names_ordered: list[str] = []
 
         # Lazy load embedding model
         self._embedding_model = None
@@ -107,6 +109,7 @@ class ToolRegistry:
         """Lazy load embedding model on first use."""
         if self._embedding_model is None:
             from .make_llm import make_llm_emb_local
+
             self._embedding_model = make_llm_emb_local(self._embedding_model_name)
         return self._embedding_model
 
@@ -124,25 +127,21 @@ class ToolRegistry:
             langchain_tool: LangChain tool object with name, description, and func
         """
         # Extract schema from LangChain tool
-        input_schema = {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
+        input_schema = {"type": "object", "properties": {}, "required": []}
 
         # Try to get schema from tool
-        if hasattr(langchain_tool, 'args_schema') and langchain_tool.args_schema:
+        if hasattr(langchain_tool, "args_schema") and langchain_tool.args_schema:
             # Convert Pydantic model to JSON schema
             try:
                 input_schema = langchain_tool.args_schema.model_json_schema()
-            except:
+            except Exception:
                 pass
 
         # Create Tool instance
         tool = Tool(
-            name=getattr(langchain_tool, 'name', langchain_tool.__class__.__name__),
-            description=getattr(langchain_tool, 'description', 'No description available'),
-            function=langchain_tool.func if hasattr(langchain_tool, 'func') else langchain_tool,
+            name=getattr(langchain_tool, "name", langchain_tool.__class__.__name__),
+            description=getattr(langchain_tool, "description", "No description available"),
+            function=langchain_tool.func if hasattr(langchain_tool, "func") else langchain_tool,
             input_schema=input_schema,
         )
 
@@ -165,11 +164,11 @@ class ToolRegistry:
         norms = np.linalg.norm(self.embeddings, axis=1, keepdims=True)
         self.embeddings = self.embeddings / norms
 
-    def get_tool(self, name: str) -> Optional[Tool]:
+    def get_tool(self, name: str) -> Tool | None:
         """Get a tool by name."""
         return self.tools.get(name)
 
-    def list_tools(self) -> List[str]:
+    def list_tools(self) -> list[str]:
         """List all registered tool names."""
         return list(self.tools.keys())
 
@@ -190,7 +189,7 @@ class EmbedToolRetriever:
         registry: ToolRegistry,
         min_tools: int = 5,
         max_tools: int = 20,
-        always_loaded_tools: List[str] = None,
+        always_loaded_tools: list[str] = None,
     ):
         """
         Initialize embedding-based tool retriever.
@@ -206,7 +205,7 @@ class EmbedToolRetriever:
         self.max_tools = max_tools
         self.always_loaded_tools = always_loaded_tools if always_loaded_tools is not None else ALWAYS_LOADED_TOOLS
 
-    def select(self, query: str, skill_tools: Optional[List[str]] = None) -> List[str]:
+    def select(self, query: str, skill_tools: list[str] | None = None) -> list[str]:
         """
         Select relevant tools using semantic similarity.
 
@@ -298,7 +297,7 @@ class LLMToolSelector:
         registry: ToolRegistry,
         min_tools: int = 5,
         max_tools: int = 20,
-        always_loaded_tools: List[str] = None,
+        always_loaded_tools: list[str] = None,
     ):
         """
         Initialize LLM tool selector.
@@ -320,6 +319,7 @@ class LLMToolSelector:
         """Get the model name from main agent's config."""
         try:
             from . import get_agent_model
+
             return get_agent_model()
         except ImportError:
             return "unknown"
@@ -329,10 +329,11 @@ class LLMToolSelector:
         """Lazy load LLM on first use (uses main agent's model)."""
         if self._llm is None:
             from . import get_agent_llm
+
             self._llm = get_agent_llm()
         return self._llm
 
-    def _build_tool_catalog(self, exclude_tools: Optional[set] = None) -> str:
+    def _build_tool_catalog(self, exclude_tools: set | None = None) -> str:
         """Build a concise catalog of tools for the LLM.
 
         Args:
@@ -344,11 +345,11 @@ class LLMToolSelector:
             if name in exclude:
                 continue
             # Truncate description to first sentence for brevity
-            desc = tool.description.split('.')[0] + '.'
+            desc = tool.description.split(".")[0] + "."
             lines.append(f"- {name}: {desc}")
         return "\n".join(lines)
 
-    def select(self, query: str, skill_tools: Optional[List[str]] = None) -> List[str]:
+    def select(self, query: str, skill_tools: list[str] | None = None) -> list[str]:
         """
         Select relevant tools for a query using LLM.
 
@@ -402,12 +403,13 @@ SELECTED TOOLS (JSON list of {self.min_tools}-{self.max_tools} tools):"""
         try:
             # Call LLM for selection
             response = self.llm.invoke(prompt)
-            content = response.content if hasattr(response, 'content') else str(response)
+            content = response.content if hasattr(response, "content") else str(response)
 
             # Parse JSON response
             import re
+
             # Find JSON array in response
-            match = re.search(r'\[.*?\]', content, re.DOTALL)
+            match = re.search(r"\[.*?\]", content, re.DOTALL)
             if match:
                 tool_names = json.loads(match.group())
                 # Validate tool names exist and not already in core tools
@@ -420,13 +422,13 @@ SELECTED TOOLS (JSON list of {self.min_tools}-{self.max_tools} tools):"""
             print(f"LLM tool selection failed: {e}")
 
         # Ensure LLM-selected tools don't exceed max_tools quota
-        selected_list = list(selected)[:self.max_tools]
+        selected_list = list(selected)[: self.max_tools]
 
         # Combine: core tools (always loaded) + LLM-selected tools (quota-limited)
         final_tools = list(core_tools) + selected_list
         return final_tools
 
-    def select_with_reasoning(self, query: str) -> Dict[str, Any]:
+    def select_with_reasoning(self, query: str) -> dict[str, Any]:
         """
         Select tools with explanation (for debugging/transparency).
 
@@ -448,15 +450,16 @@ Respond in JSON format:
 
         try:
             response = self.llm.invoke(prompt)
-            content = response.content if hasattr(response, 'content') else str(response)
+            content = response.content if hasattr(response, "content") else str(response)
 
             # Parse JSON response
             import re
-            match = re.search(r'\{.*\}', content, re.DOTALL)
+
+            match = re.search(r"\{.*\}", content, re.DOTALL)
             if match:
                 result = json.loads(match.group())
                 # Validate tool names
-                result['tools'] = [t for t in result.get('tools', []) if t in self.registry.tools]
+                result["tools"] = [t for t in result.get("tools", []) if t in self.registry.tools]
                 return result
 
         except Exception as e:
@@ -504,7 +507,7 @@ class ToolExecutor:
         except Exception as e:
             return {"error": str(e), "tool": tool_name}
 
-    def get_tool_function(self, tool_name: str) -> Optional[Callable]:
+    def get_tool_function(self, tool_name: str) -> Callable | None:
         """
         Get the executable function for a tool.
 
@@ -513,7 +516,7 @@ class ToolExecutor:
         tool = self.registry.get_tool(tool_name)
         return tool.function if tool else None
 
-    def create_tool_context(self, tool_names: List[str]) -> Dict[str, Callable]:
+    def create_tool_context(self, tool_names: list[str]) -> dict[str, Callable]:
         """
         Create a dict of tool functions for code execution.
 

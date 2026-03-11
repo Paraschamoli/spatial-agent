@@ -5,12 +5,13 @@ These tools act as autonomous subagents that perform multi-step analysis tasks,
 including reading files, interpreting images, and synthesizing comprehensive reports.
 """
 
-import os
-import json
 import base64
-import pandas as pd
-from typing import Annotated
+import json
+import os
 from os.path import exists
+from typing import Annotated
+
+import pandas as pd
 from langchain_core.tools import tool
 from pydantic import Field
 
@@ -19,9 +20,11 @@ _config = {
     "save_path": "./experiments",
 }
 
+
 def configure_subagent_tools(save_path: str = "./experiments"):
     """Configure paths for subagent tools. Call this before using the tools."""
     _config["save_path"] = save_path
+
 
 # Default model for subagent LLM calls (fallback if agent model not set)
 DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
@@ -35,6 +38,7 @@ def _get_subagent_model() -> str:
     """
     try:
         from ..agent import get_agent_model
+
         model = get_agent_model()
         # Fallback if model is empty or resolution failed ("unknown")
         if not model or model == "unknown":
@@ -57,9 +61,10 @@ def _resize_image_if_needed(image_path: str, max_size_bytes: int = 4_000_000) ->
     Returns:
         Image bytes (resized if necessary, original if not)
     """
-    from PIL import Image
     import io
     import math
+
+    from PIL import Image
 
     with open(image_path, "rb") as f:
         original_bytes = f.read()
@@ -74,7 +79,7 @@ def _resize_image_if_needed(image_path: str, max_size_bytes: int = 4_000_000) ->
         resized = img.resize(new_size, Image.Resampling.LANCZOS)
 
         buffer = io.BytesIO()
-        resized.save(buffer, format=img.format or 'PNG')
+        resized.save(buffer, format=img.format or "PNG")
         print(f"Resized image: {img.width}x{img.height} -> {new_size[0]}x{new_size[1]}")
         return buffer.getvalue()
 
@@ -83,11 +88,25 @@ def _resize_image_if_needed(image_path: str, max_size_bytes: int = 4_000_000) ->
 # Deep Research Report Subagent
 # =============================================================================
 
+
 @tool
 def report_subagent(
-    user_query: Annotated[str, Field(description="The research question being investigated (e.g., 'How does cellular composition change during disease progression?')")],
-    data_info: Annotated[str, Field(description="Brief dataset description including species, tissue, technology, and conditions (e.g., 'MERFISH spatial transcriptomics of mouse colon, 4 disease stages')")],
-    save_path: Annotated[str, Field(description="Directory path containing analysis outputs (figures, CSVs, observation_log.jsonl)")] = None,
+    user_query: Annotated[
+        str,
+        Field(
+            description="The research question being investigated (e.g., 'How does cellular composition change during disease progression?')"
+        ),
+    ],
+    data_info: Annotated[
+        str,
+        Field(
+            description="Brief dataset description including species, tissue, technology, and conditions (e.g., 'MERFISH spatial transcriptomics of mouse colon, 4 disease stages')"
+        ),
+    ],
+    save_path: Annotated[
+        str, Field(description="Directory path containing analysis outputs (figures, CSVs, observation_log.jsonl)")
+    ]
+    | None = None,
 ) -> str:
     """Generate a publication-quality research report by analyzing all saved artifacts.
 
@@ -121,8 +140,9 @@ def report_subagent(
     Returns:
         str: Summary of report generation with file path
     """
-    from ..agent import make_llm
     import glob
+
+    from ..agent import make_llm
 
     save_path = save_path or _config["save_path"]
     print("🔬 Starting Deep Research Report Subagent...")
@@ -142,17 +162,17 @@ def report_subagent(
     observation_log_path = f"{save_path}/observation_log.jsonl"
     observations = []
     if exists(observation_log_path):
-        with open(observation_log_path, 'r') as f:
+        with open(observation_log_path) as f:
             for line in f:
                 try:
                     observations.append(json.loads(line.strip()))
-                except:
+                except Exception:
                     pass
     print(f"   Found {len(observations)} logged observations")
 
     # Discover all files
     figures = []
-    for ext in ['*.png', '*.jpg', '*.jpeg', '*.svg']:
+    for ext in ["*.png", "*.jpg", "*.jpeg", "*.svg"]:
         figures.extend(glob.glob(f"{save_path}/**/{ext}", recursive=True))
     figures = sorted(set(figures))
     print(f"   Found {len(figures)} figures")
@@ -160,8 +180,7 @@ def report_subagent(
     csv_files = sorted(glob.glob(f"{save_path}/**/*.csv", recursive=True))
     print(f"   Found {len(csv_files)} CSV files")
 
-    json_files = [f for f in sorted(glob.glob(f"{save_path}/**/*.json", recursive=True))
-                  if 'observation_log' not in f]
+    json_files = [f for f in sorted(glob.glob(f"{save_path}/**/*.json", recursive=True)) if "observation_log" not in f]
     print(f"   Found {len(json_files)} JSON files")
 
     # =========================================================================
@@ -179,12 +198,16 @@ def report_subagent(
             image_bytes = _resize_image_if_needed(fig_path)
             image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-            ext = fig_path.lower().split('.')[-1]
-            mime_type = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg'}.get(ext, 'image/png')
+            ext = fig_path.lower().split(".")[-1]
+            mime_type = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(ext, "image/png")
 
             messages = [
-                {"role": "user", "content": [
-                    {"type": "text", "text": f"""Analyze this scientific figure from a spatial transcriptomics analysis.
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"""Analyze this scientific figure from a spatial transcriptomics analysis.
 Figure filename: {fig_name}
 Research context: {user_query[:500]}
 Dataset: {data_info}
@@ -193,16 +216,18 @@ Provide a concise analysis (200-300 words) covering:
 1. What the figure shows (plot type, axes, coloring)
 2. Key patterns or findings visible
 3. Biological interpretation
-4. Main takeaway for the research question"""},
-                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_b64}"}}
-                ]}
+4. Main takeaway for the research question""",
+                        },
+                        {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_b64}"}},
+                    ],
+                }
             ]
 
             response = llm.invoke(messages)
             figure_analyses[fig_name] = response.content
 
         except Exception as e:
-            figure_analyses[fig_name] = f"Could not analyze: {str(e)}"
+            figure_analyses[fig_name] = f"Could not analyze: {e!s}"
 
     # =========================================================================
     # PASS 3: Analyze CSV data tables
@@ -220,13 +245,13 @@ Provide a concise analysis (200-300 words) covering:
             summary += f"- Shape: {df.shape[0]} rows × {df.shape[1]} columns\n"
             summary += f"- Columns: {', '.join(df.columns[:10])}"
             if len(df.columns) > 10:
-                summary += f" ... (+{len(df.columns)-10} more)"
+                summary += f" ... (+{len(df.columns) - 10} more)"
             summary += "\n"
 
             # Add numeric summary for key columns
-            numeric_cols = df.select_dtypes(include=['number']).columns[:5]
+            numeric_cols = df.select_dtypes(include=["number"]).columns[:5]
             if len(numeric_cols) > 0:
-                summary += f"- Key statistics:\n"
+                summary += "- Key statistics:\n"
                 for col in numeric_cols:
                     summary += f"  - {col}: mean={df[col].mean():.3f}, std={df[col].std():.3f}\n"
 
@@ -236,46 +261,50 @@ Provide a concise analysis (200-300 words) covering:
             csv_summaries[csv_name] = summary
 
         except Exception as e:
-            csv_summaries[csv_name] = f"Could not read: {str(e)}"
+            csv_summaries[csv_name] = f"Could not read: {e!s}"
 
     # =========================================================================
     # PASS 4: Read JSON summaries
     # =========================================================================
-    print(f"📄 Pass 4: Reading JSON summaries...")
+    print("📄 Pass 4: Reading JSON summaries...")
 
     json_summaries = {}
     for json_file in json_files[:5]:
         try:
-            with open(json_file, 'r') as f:
+            with open(json_file) as f:
                 content = json.load(f)
                 content_str = json.dumps(content, indent=2)
                 if len(content_str) > 3000:
                     content_str = content_str[:3000] + "\n... (truncated)"
                 json_summaries[os.path.basename(json_file)] = content_str
-        except:
+        except Exception:
             pass
 
     # =========================================================================
     # PASS 5: Format observation history
     # =========================================================================
-    print(f"📝 Pass 5: Formatting observation history...")
+    print("📝 Pass 5: Formatting observation history...")
 
     observation_narrative = []
     for obs in observations:
         step_text = f"**Step {obs.get('step', '?')}:**\n"
         step_text += f"Code: `{obs.get('code_snippet', 'N/A')[:200]}...`\n"
-        result = obs.get('result_summary', '')
+        result = obs.get("result_summary", "")
         if result:
             step_text += f"Result: {result[:500]}...\n" if len(result) > 500 else f"Result: {result}\n"
-        fig_interp = obs.get('figure_interpretations', '')
+        fig_interp = obs.get("figure_interpretations", "")
         if fig_interp:
-            step_text += f"Figure insights: {fig_interp[:300]}...\n" if len(fig_interp) > 300 else f"Figure insights: {fig_interp}\n"
+            step_text += (
+                f"Figure insights: {fig_interp[:300]}...\n"
+                if len(fig_interp) > 300
+                else f"Figure insights: {fig_interp}\n"
+            )
         observation_narrative.append(step_text)
 
     # =========================================================================
     # PASS 6: Generate comprehensive report
     # =========================================================================
-    print(f"📝 Pass 6: Generating comprehensive report...")
+    print("📝 Pass 6: Generating comprehensive report...")
 
     # Build comprehensive context
     figure_section = "\n\n".join([f"### {name}\n{analysis}" for name, analysis in figure_analyses.items()])
@@ -365,8 +394,11 @@ Structure your report as follows:
 Write the complete report now. Be specific, cite the actual figures generated, and provide biological interpretation."""
 
     messages = [
-        {"role": "system", "content": "You are an expert computational biologist writing a comprehensive research report. Write in clear, scientific prose. Be specific and detailed."},
-        {"role": "user", "content": report_prompt}
+        {
+            "role": "system",
+            "content": "You are an expert computational biologist writing a comprehensive research report. Write in clear, scientific prose. Be specific and detailed.",
+        },
+        {"role": "user", "content": report_prompt},
     ]
 
     response = llm.invoke(messages)
@@ -381,13 +413,14 @@ Write the complete report now. Be specific, cite the actual figures generated, a
     full_report = report_content + figure_gallery
 
     # === Save report ===
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         f.write(full_report)
 
     # Also save as HTML for better viewing
     html_path = None
     try:
         import markdown
+
         html_content = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -406,11 +439,11 @@ Write the complete report now. Be specific, cite the actual figures generated, a
     </style>
 </head>
 <body>
-{markdown.markdown(full_report, extensions=['tables', 'fenced_code'])}
+{markdown.markdown(full_report, extensions=["tables", "fenced_code"])}
 </body>
 </html>"""
         html_path = f"{save_path}/deep_research_report.html"
-        with open(html_path, 'w') as f:
+        with open(html_path, "w") as f:
             f.write(html_content)
     except ImportError:
         pass
@@ -449,12 +482,28 @@ Write the complete report now. Be specific, cite the actual figures generated, a
 # Conclusion Verification Subagent
 # =============================================================================
 
+
 @tool
 def verification_subagent(
-    user_query: Annotated[str, Field(description="The research question being investigated (e.g., 'How does cellular composition change during disease?')")],
-    conclusions: Annotated[str, Field(description="The conclusions to verify, as a string (e.g., '1) Immune cells increase 10-fold. 2) Epithelial cells decrease 50%.')")],
-    data_info: Annotated[str, Field(description="Brief dataset description (e.g., 'MERFISH mouse colon, 50k cells, 4 disease stages')")],
-    save_path: Annotated[str, Field(description="Directory path containing analysis outputs (figures, CSVs, observation_log.jsonl)")] = None,
+    user_query: Annotated[
+        str,
+        Field(
+            description="The research question being investigated (e.g., 'How does cellular composition change during disease?')"
+        ),
+    ],
+    conclusions: Annotated[
+        str,
+        Field(
+            description="The conclusions to verify, as a string (e.g., '1) Immune cells increase 10-fold. 2) Epithelial cells decrease 50%.')"
+        ),
+    ],
+    data_info: Annotated[
+        str, Field(description="Brief dataset description (e.g., 'MERFISH mouse colon, 50k cells, 4 disease stages')")
+    ],
+    save_path: Annotated[
+        str, Field(description="Directory path containing analysis outputs (figures, CSVs, observation_log.jsonl)")
+    ]
+    | None = None,
 ) -> str:
     """Verify analysis conclusions against saved evidence (figures, data, observations).
 
@@ -486,8 +535,9 @@ def verification_subagent(
     Returns:
         str: Detailed verification report with scores and recommendations
     """
-    from ..agent import make_llm
     import glob
+
+    from ..agent import make_llm
 
     save_path = save_path or _config["save_path"]
     print("🔍 Starting Conclusion Verification Subagent...")
@@ -505,17 +555,17 @@ def verification_subagent(
     observation_log_path = f"{save_path}/observation_log.jsonl"
     observations = []
     if exists(observation_log_path):
-        with open(observation_log_path, 'r') as f:
+        with open(observation_log_path) as f:
             for line in f:
                 try:
                     observations.append(json.loads(line.strip()))
-                except:
+                except Exception:
                     pass
     print(f"   Found {len(observations)} logged observations")
 
     # Discover all files
     figures = []
-    for ext in ['*.png', '*.jpg', '*.jpeg', '*.svg']:
+    for ext in ["*.png", "*.jpg", "*.jpeg", "*.svg"]:
         figures.extend(glob.glob(f"{save_path}/**/{ext}", recursive=True))
     figures = sorted(set(figures))
     print(f"   Found {len(figures)} figures")
@@ -526,14 +576,14 @@ def verification_subagent(
     # Extract analyses performed from observations
     analyses_performed = []
     for obs in observations:
-        code = obs.get('code_snippet', '')
+        code = obs.get("code_snippet", "")
         if code:
             # Extract key analysis types from code
-            if 'sc.pl.' in code or 'plt.' in code:
+            if "sc.pl." in code or "plt." in code:
                 analyses_performed.append(f"Visualization: {code[:100]}...")
-            elif 'sc.tl.' in code:
+            elif "sc.tl." in code:
                 analyses_performed.append(f"Analysis: {code[:100]}...")
-            elif any(x in code for x in ['groupby', 'value_counts', 'crosstab']):
+            elif any(x in code for x in ["groupby", "value_counts", "crosstab"]):
                 analyses_performed.append(f"Statistical summary: {code[:100]}...")
 
     # =========================================================================
@@ -543,7 +593,7 @@ def verification_subagent(
 
     figure_verifications = {}
     # Select diverse figures (first, middle, last, and key ones)
-    sample_indices = [0, len(figures)//3, len(figures)//2, 2*len(figures)//3, len(figures)-1]
+    sample_indices = [0, len(figures) // 3, len(figures) // 2, 2 * len(figures) // 3, len(figures) - 1]
     sample_indices = sorted(set(i for i in sample_indices if 0 <= i < len(figures)))[:5]
 
     for idx in sample_indices:
@@ -555,12 +605,16 @@ def verification_subagent(
             image_bytes = _resize_image_if_needed(fig_path)
             image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-            ext = fig_path.lower().split('.')[-1]
-            mime_type = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg'}.get(ext, 'image/png')
+            ext = fig_path.lower().split(".")[-1]
+            mime_type = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(ext, "image/png")
 
             messages = [
-                {"role": "user", "content": [
-                    {"type": "text", "text": f"""You are verifying scientific conclusions. Analyze this figure critically.
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"""You are verifying scientific conclusions. Analyze this figure critically.
 
 Figure: {fig_name}
 Research question: {user_query[:300]}
@@ -572,16 +626,18 @@ Answer these questions:
 3. Are there any patterns in the figure NOT mentioned in the conclusions?
 4. What is the quality of this visualization?
 
-Be objective and critical. If conclusions are not supported, say so clearly."""},
-                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_b64}"}}
-                ]}
+Be objective and critical. If conclusions are not supported, say so clearly.""",
+                        },
+                        {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_b64}"}},
+                    ],
+                }
             ]
 
             response = llm.invoke(messages)
             figure_verifications[fig_name] = response.content
 
         except Exception as e:
-            figure_verifications[fig_name] = f"Could not verify: {str(e)}"
+            figure_verifications[fig_name] = f"Could not verify: {e!s}"
 
     # =========================================================================
     # PASS 3: Read CSV data to verify quantitative claims
@@ -600,13 +656,13 @@ Be objective and critical. If conclusions are not supported, say so clearly."""}
             summary += f"- Columns: {', '.join(df.columns[:8])}\n"
 
             # Extract key statistics
-            numeric_cols = df.select_dtypes(include=['number']).columns[:3]
+            numeric_cols = df.select_dtypes(include=["number"]).columns[:3]
             if len(numeric_cols) > 0:
                 for col in numeric_cols:
                     summary += f"- {col}: min={df[col].min():.3f}, max={df[col].max():.3f}, mean={df[col].mean():.3f}\n"
 
             # Look for categorical distributions
-            cat_cols = df.select_dtypes(include=['object']).columns[:2]
+            cat_cols = df.select_dtypes(include=["object"]).columns[:2]
             for col in cat_cols:
                 if df[col].nunique() < 20:
                     summary += f"- {col} distribution: {dict(df[col].value_counts().head(5))}\n"
@@ -614,25 +670,25 @@ Be objective and critical. If conclusions are not supported, say so clearly."""}
             data_evidence[csv_name] = summary
 
         except Exception as e:
-            data_evidence[csv_name] = f"Could not read: {str(e)}"
+            data_evidence[csv_name] = f"Could not read: {e!s}"
 
     # =========================================================================
     # PASS 4: Format observation history
     # =========================================================================
-    print(f"📝 Pass 4: Extracting key observations...")
+    print("📝 Pass 4: Extracting key observations...")
 
     observation_summary = []
     for obs in observations[-10:]:  # Last 10 observations
-        step = obs.get('step', '?')
-        code = obs.get('code_snippet', '')[:150]
-        result = obs.get('result_summary', '')[:200]
+        step = obs.get("step", "?")
+        code = obs.get("code_snippet", "")[:150]
+        result = obs.get("result_summary", "")[:200]
         if code or result:
             observation_summary.append(f"Step {step}: {code}... → {result}")
 
     # =========================================================================
     # PASS 5: Generate comprehensive verification report
     # =========================================================================
-    print(f"✅ Pass 5: Generating verification report...")
+    print("✅ Pass 5: Generating verification report...")
 
     # Build verification context
     figure_section = "\n\n".join([f"### {name}\n{analysis}" for name, analysis in figure_verifications.items()])
@@ -720,8 +776,11 @@ Recommendation: [ACCEPT / REVISE / MAJOR REVISION NEEDED]
 """
 
     messages = [
-        {"role": "system", "content": "You are an expert reviewer performing rigorous quality control. Be objective, critical, and constructive. Do not hesitate to point out issues."},
-        {"role": "user", "content": verification_prompt}
+        {
+            "role": "system",
+            "content": "You are an expert reviewer performing rigorous quality control. Be objective, critical, and constructive. Do not hesitate to point out issues.",
+        },
+        {"role": "user", "content": verification_prompt},
     ]
 
     response = llm.invoke(messages)
@@ -729,10 +788,12 @@ Recommendation: [ACCEPT / REVISE / MAJOR REVISION NEEDED]
 
     # Save verification report
     output_path = f"{save_path}/conclusion_verification.md"
-    with open(output_path, 'w') as f:
-        f.write(f"# Conclusion Verification Report\n\n")
-        f.write(f"**Generated by:** Verification Subagent\n")
-        f.write(f"**Artifacts analyzed:** {len(observations)} observations, {len(figures)} figures, {len(csv_files)} CSV files\n\n")
+    with open(output_path, "w") as f:
+        f.write("# Conclusion Verification Report\n\n")
+        f.write("**Generated by:** Verification Subagent\n")
+        f.write(
+            f"**Artifacts analyzed:** {len(observations)} observations, {len(figures)} figures, {len(csv_files)} CSV files\n\n"
+        )
         f.write("---\n\n")
         f.write(verification_report)
 

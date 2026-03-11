@@ -1,15 +1,12 @@
 """Utility functions for tool module."""
 
-import hashlib
 import logging
-import os
 import pickle
 import time
 from pathlib import Path
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-
 
 # Cache directory for embeddings (under repo for reproducibility)
 _EMBEDDING_CACHE_DIR = Path(__file__).parent.parent.parent / "data" / "embedding_cache"
@@ -79,17 +76,20 @@ def _embed_with_retry(embedder, texts: list, max_retries: int = 3, base_delay: f
             if "429" in error_str or "RateLimit" in error_str or "rate" in error_str.lower():
                 if attempt < max_retries:
                     # Extract wait time from error message if available
-                    wait_time = base_delay * (2 ** attempt)  # Exponential backoff
+                    wait_time = base_delay * (2**attempt)  # Exponential backoff
                     if "retry after" in error_str.lower():
                         try:
                             # Try to parse "retry after X seconds" from error
                             import re
+
                             match = re.search(r"retry after (\d+)", error_str.lower())
                             if match:
                                 wait_time = max(int(match.group(1)), wait_time)
-                        except:
+                        except Exception:
                             pass
-                    logging.warning(f"Rate limit hit, waiting {wait_time:.1f}s before retry {attempt + 1}/{max_retries}")
+                    logging.warning(
+                        f"Rate limit hit, waiting {wait_time:.1f}s before retry {attempt + 1}/{max_retries}"
+                    )
                     time.sleep(wait_time)
                     continue
             # Not a rate limit error or max retries reached
@@ -98,8 +98,15 @@ def _embed_with_retry(embedder, texts: list, max_retries: int = 3, base_delay: f
     raise RuntimeError(f"Failed after {max_retries} retries")
 
 
-def find_most_similar(llm_emb_query, queries, descriptions, batch_size=1000, llm_emb_doc=None,
-                      database: str = None, embedding_model: str = None):
+def find_most_similar(
+    llm_emb_query,
+    queries,
+    descriptions,
+    batch_size=1000,
+    llm_emb_doc=None,
+    database: str | None = None,
+    embedding_model: str | None = None,
+):
     """Process queries and descriptions in batches and return matches with similarities.
 
     Args:
@@ -162,11 +169,9 @@ def find_most_similar(llm_emb_query, queries, descriptions, batch_size=1000, llm
         similarities = cosine_similarity([query_embeddings[i]], description_embeddings)[0]
         most_similar_idx = np.argmax(similarities)
 
-        logging.info("{:<40} | {:<40} | {:.3f}".format(
-            query[:40],
-            descriptions[most_similar_idx][:40],
-            similarities[most_similar_idx]
-        ))
+        logging.info(
+            f"{query[:40]:<40} | {descriptions[most_similar_idx][:40]:<40} | {similarities[most_similar_idx]:.3f}"
+        )
         matched_descriptions.append(descriptions[most_similar_idx])
 
     return matched_descriptions
@@ -195,8 +200,7 @@ def parse_list_string(input_str: str, uppercase: bool = False) -> list[str]:
     cleaned = input_str.strip()
 
     # Remove outer brackets if present (stringified list)
-    if (cleaned.startswith('[') and cleaned.endswith(']')) or \
-       (cleaned.startswith('(') and cleaned.endswith(')')):
+    if (cleaned.startswith("[") and cleaned.endswith("]")) or (cleaned.startswith("(") and cleaned.endswith(")")):
         cleaned = cleaned[1:-1]
 
     # Split by comma and clean each item
@@ -215,21 +219,21 @@ def parse_list_string(input_str: str, uppercase: bool = False) -> list[str]:
 def clean_code(code):
     """Clean code by removing markdown and main() blocks."""
     # Remove markdown if present
-    code = code.replace('```python\n', '').replace('```', '').strip()
+    code = code.replace("```python\n", "").replace("```", "").strip()
 
     # Remove main() and if __name__ == "__main__" block
-    lines = code.split('\n')
+    lines = code.split("\n")
     cleaned_lines = []
     skip_block = False
     for line in lines:
-        if 'def main()' in line or 'if __name__' in line:
+        if "def main()" in line or "if __name__" in line:
             skip_block = True
             continue
-        if skip_block and line.startswith((' ', '\t')):
+        if skip_block and line.startswith((" ", "\t")):
             continue
         if not line.strip():
             skip_block = False
         if not skip_block:
             cleaned_lines.append(line)
 
-    return '\n'.join(cleaned_lines)
+    return "\n".join(cleaned_lines)

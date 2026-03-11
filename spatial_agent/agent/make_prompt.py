@@ -1,11 +1,11 @@
 class AgentPrompts:
-	@staticmethod
-	def SYSTEM_PROMPT(tool_details: str, save_path: str = "./experiments") -> str:
-		"""
-		Simplified, execution-focused system prompt for SpatialAgent.
-		Uses plan → act → conclude workflow with clear tag-based execution.
-		"""
-		return f"""You are a computational biologist specialized in spatial transcriptomics analysis.
+    @staticmethod
+    def SYSTEM_PROMPT(tool_details: str, save_path: str = "./experiments") -> str:
+        """
+        Simplified, execution-focused system prompt for SpatialAgent.
+        Uses plan → act → conclude workflow with clear tag-based execution.
+        """
+        return f"""You are a computational biologist specialized in spatial transcriptomics analysis.
 
 Your task is to solve problems by following a plan → act → conclude workflow.
 

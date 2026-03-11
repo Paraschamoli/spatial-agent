@@ -120,10 +120,10 @@ cv_scores = []
 
 for fold, (train_idx, test_idx) in enumerate(kf.split(shared_genes)):
     print(f"\nFold {fold + 1}/5")
-    
+
     train_genes = [shared_genes[i] for i in train_idx]
     test_genes = [shared_genes[i] for i in test_idx]
-    
+
     # Preprocess with training genes only
     tangram_preprocess(
         adata_sc_path="scrna.h5ad",
@@ -131,7 +131,7 @@ for fold, (train_idx, test_idx) in enumerate(kf.split(shared_genes)):
         marker_genes=train_genes,
         cell_type_key="cell_type"
     )
-    
+
     # Map cells
     ad_map = tg.map_cells_to_space(
         sc.read_h5ad("experiments/tangram_sc_prep.h5ad"),
@@ -139,12 +139,12 @@ for fold, (train_idx, test_idx) in enumerate(kf.split(shared_genes)):
         mode="cells",
         device="cuda:0"
     )
-    
+
     # Project and evaluate test genes
     ad_ge = tg.project_genes(ad_map, adata_sc)
     df_test = tg.compare_spatial_geneexp(ad_ge, adata_sp, adata_sc)
     test_scores = df_test[df_test['gene'].isin(test_genes)]['score']
-    
+
     cv_scores.append(test_scores.mean())
     print(f"Test score: {test_scores.mean():.3f}")
 
@@ -172,7 +172,7 @@ major_types = ['T cell', 'B cell', 'Macrophage', 'Fibroblast']
 for ct in major_types:
     if ct in cell_type_predictions.columns:
         fig, ax = plt.subplots(figsize=(8, 6))
-        sc.pl.spatial(adata_sp, color=ct, ax=ax, show=False, 
+        sc.pl.spatial(adata_sp, color=ct, ax=ax, show=False,
                      title=f"{ct} abundance (Tangram)")
         plt.savefig(f"tangram_{ct.lower().replace(' ', '_')}.png", dpi=150)
         plt.close()
@@ -195,7 +195,7 @@ results = {}
 
 for config in configs:
     print(f"\nTesting: {config['name']}")
-    
+
     # Map with specific configuration
     if config["name"] == "constrained":
         ad_map = tg.map_cells_to_space(
@@ -206,16 +206,16 @@ for config in configs:
         ad_map = tg.map_cells_to_space(
             adata_sc, adata_sp, mode=config["mode"], device="cuda:0"
         )
-    
+
     # Evaluate
     ad_ge = tg.project_genes(ad_map, adata_sc)
     df_eval = tg.compare_spatial_geneexp(ad_ge, adata_sp, adata_sc)
-    
+
     results[config["name"]] = {
         "train_score": df_eval[df_eval["is_training"]]["score"].mean(),
         "test_score": df_eval[~df_eval["is_training"]]["score"].mean()
     }
-    
+
     print(f"  Train: {results[config['name']]['train_score']:.3f}")
     print(f"  Test: {results[config['name']]['test_score']:.3f}")
 

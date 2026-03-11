@@ -16,11 +16,12 @@ def load_all_tools(save_path: str = "./experiments", data_path: str = "./data"):
         list: List of LangChain tool instances
     """
     # Configure tool paths
+    from spatial_agent.tools.analytics import configure_analytics_tools
     from spatial_agent.tools.coding import configure_coding_tools
     from spatial_agent.tools.databases import configure_database_tools
-    from spatial_agent.tools.analytics import configure_analytics_tools
     from spatial_agent.tools.interpretation import configure_interpretation_tools
     from spatial_agent.tools.subagent import configure_subagent_tools
+
     configure_coding_tools(save_path, data_path)
     configure_database_tools(data_path)
     configure_analytics_tools(save_path)

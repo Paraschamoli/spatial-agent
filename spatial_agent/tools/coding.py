@@ -4,18 +4,16 @@ Python REPL and Bash execution tools for CodeAct.
 Simple tools that execute code/commands. Paths are configured globally.
 """
 
-import sys
-import io
-import traceback
-import subprocess
-import os
-import base64
 import glob
-from contextlib import redirect_stdout, redirect_stderr
-from typing import Annotated, Dict, Any, List, Set
+import io
+import os
+import subprocess
+import traceback
+from contextlib import redirect_stderr, redirect_stdout
+from typing import Annotated, Any
+
 from langchain_core.tools import tool
 from pydantic import Field
-
 
 # =============================================================================
 # Global Configuration
@@ -27,17 +25,20 @@ _config = {
 }
 
 # Store new image files created during execution
-_new_image_files: List[str] = []  # List of file paths to new images
+_new_image_files: list[str] = []  # List of file paths to new images
 
-def get_new_image_files() -> List[str]:
+
+def get_new_image_files() -> list[str]:
     """Get and clear list of new image files created during execution."""
     global _new_image_files
     files = _new_image_files.copy()
     _new_image_files = []
     return files
 
+
 # Tools to inject into REPL namespace (set via inject_tools_into_repl)
 _injected_tools = {}
+
 
 def configure_coding_tools(save_path: str = "./experiments", data_path: str = "./data"):
     """Configure paths for coding tools. Call this before using the tools."""
@@ -46,6 +47,7 @@ def configure_coding_tools(save_path: str = "./experiments", data_path: str = ".
     # Reset REPL if paths change
     global _repl_instance
     _repl_instance = None
+
 
 def inject_tools_into_repl(tools: dict):
     """
@@ -64,10 +66,11 @@ def inject_tools_into_repl(tools: dict):
 # Python REPL Implementation
 # =============================================================================
 
+
 class _StatefulPythonREPL:
     """Stateful Python REPL that maintains variables across executions."""
 
-    def __init__(self, save_path: str = None, data_path: str = None):
+    def __init__(self, save_path: str | None = None, data_path: str | None = None):
         self.save_path = save_path or _config["save_path"]
         self.data_path = data_path or _config["data_path"]
         # Use single namespace for both globals and locals
@@ -107,12 +110,12 @@ data_path = r'{self.data_path}'
             self.namespace[tool_name] = tool_func
         self._libraries_imported = True
 
-    def _scan_image_files(self, directory: str) -> Set[str]:
+    def _scan_image_files(self, directory: str) -> set[str]:
         """Scan directory recursively for image files, return set of (path, mtime) tuples."""
-        image_extensions = ('*.png', '*.jpg', '*.jpeg', '*.svg', '*.pdf')
+        image_extensions = ("*.png", "*.jpg", "*.jpeg", "*.svg", "*.pdf")
         files = set()
         for ext in image_extensions:
-            for f in glob.glob(os.path.join(directory, '**', ext), recursive=True):
+            for f in glob.glob(os.path.join(directory, "**", ext), recursive=True):
                 try:
                     mtime = os.path.getmtime(f)
                     files.add((f, mtime))
@@ -120,7 +123,7 @@ data_path = r'{self.data_path}'
                     pass
         return files
 
-    def _find_new_images(self, before: Set[str], after: Set[str]) -> List[str]:
+    def _find_new_images(self, before: set[str], after: set[str]) -> list[str]:
         """Find images that are new or modified."""
         before_paths = {f for f, _ in before}
         new_images = []
@@ -135,14 +138,14 @@ data_path = r'{self.data_path}'
                     new_images.append(path)
         return sorted(new_images)  # Sort for consistent ordering
 
-    def _get_monitor_paths(self) -> List[str]:
+    def _get_monitor_paths(self) -> list[str]:
         """Get list of directories to monitor for new images."""
         paths = set()
         # Always include configured save_path
         paths.add(self.save_path)
 
         # Common variable names used for output directories
-        path_var_names = ['save_path', 'output_dir', 'output_path', 'out_dir', 'fig_dir', 'figure_dir', 'results_dir']
+        path_var_names = ["save_path", "output_dir", "output_path", "out_dir", "fig_dir", "figure_dir", "results_dir"]
 
         # Check for these variables in REPL namespace
         for var_name in path_var_names:
@@ -154,7 +157,8 @@ data_path = r'{self.data_path}'
         # Also check scanpy's figure directory
         try:
             import scanpy as sc
-            if hasattr(sc.settings, 'figdir') and sc.settings.figdir:
+
+            if hasattr(sc.settings, "figdir") and sc.settings.figdir:
                 paths.add(str(sc.settings.figdir))
         except ImportError:
             pass
@@ -162,7 +166,7 @@ data_path = r'{self.data_path}'
         # Filter to existing directories only
         return [p for p in paths if os.path.isdir(p)]
 
-    def execute(self, code: str) -> Dict[str, Any]:
+    def execute(self, code: str) -> dict[str, Any]:
         """Execute Python code and return results."""
         global _new_image_files
         self._preimport_libraries()
@@ -211,7 +215,7 @@ data_path = r'{self.data_path}'
                 "success": True,
                 "output": output + stderr if stderr else output,
                 "result": result_str,
-                "error": None
+                "error": None,
             }
 
         except Exception as e:
@@ -230,7 +234,7 @@ data_path = r'{self.data_path}'
             error_parts = [
                 "=" * 60,
                 f"ERROR: {type(e).__name__}",
-                f"MESSAGE: {str(e)}",
+                f"MESSAGE: {e!s}",
                 "=" * 60,
             ]
 
@@ -245,12 +249,13 @@ data_path = r'{self.data_path}'
                 "success": False,
                 "output": stdout_capture.getvalue(),
                 "result": None,
-                "error": "\n".join(error_parts)
+                "error": "\n".join(error_parts),
             }
 
 
 # Singleton REPL instance
 _repl_instance = None
+
 
 def _get_repl():
     global _repl_instance
@@ -262,6 +267,7 @@ def _get_repl():
 # =============================================================================
 # Tools
 # =============================================================================
+
 
 @tool
 def execute_python(
@@ -301,8 +307,8 @@ def execute_bash(
     Default timeout: 60 seconds.
     """
     env = os.environ.copy()
-    env['SAVE_PATH'] = _config["save_path"]
-    env['DATA_PATH'] = _config["data_path"]
+    env["SAVE_PATH"] = _config["save_path"]
+    env["DATA_PATH"] = _config["data_path"]
 
     try:
         result = subprocess.run(
@@ -329,7 +335,7 @@ def execute_bash(
     except subprocess.TimeoutExpired:
         return "Command timed out after 60 seconds"
     except Exception as e:
-        return f"Error: {type(e).__name__}: {str(e)}"
+        return f"Error: {type(e).__name__}: {e!s}"
 
 
 # =============================================================================
@@ -339,10 +345,12 @@ def execute_bash(
 # Alias for code that imports StatefulPythonREPL directly
 StatefulPythonREPL = _StatefulPythonREPL
 
+
 def create_python_repl_tool(save_path: str, data_path: str):
     """Deprecated: Use configure_coding_tools() then import execute_python directly."""
     configure_coding_tools(save_path, data_path)
     return execute_python, _get_repl()
+
 
 def create_bash_tool(save_path: str, data_path: str):
     """Deprecated: Use configure_coding_tools() then import execute_bash directly."""

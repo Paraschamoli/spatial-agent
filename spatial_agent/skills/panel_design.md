@@ -6,7 +6,7 @@ Design targeted gene panels for spatial transcriptomics platforms.
 
 **This workflow is for targeted platforms** with limited gene panels:
 - **MERFISH**: ~500-1000 genes
-- **Xenium**: ~300-500 genes  
+- **Xenium**: ~300-500 genes
 - **CosMx**: ~1000 genes
 - **SeqFISH**: ~200-500 genes
 - **NanoString GeoMx**: ~50-800 genes
@@ -39,7 +39,7 @@ target_cell_types = ["epithelial", "immune", "stromal", "endothelial"]
 panel_size = 50  # Target number of genes
 biological_questions = [
     "tumor state",
-    "immune process", 
+    "immune process",
     "tissue context"
 ]
 ```
@@ -100,7 +100,7 @@ for cell_type in target_cell_types:
     })
     print(f"\n{cell_type} markers:")
     print(result)
-    
+
     # Extract genes from result (simplified - would need parsing)
     # For now, note the result structure
     all_markers[cell_type] = result

@@ -12,6 +12,7 @@ All tools are standalone functions following Biomni pattern.
 import ast
 import inspect
 from typing import Annotated
+
 from langchain_core.tools import tool
 from pydantic import Field
 
@@ -48,7 +49,7 @@ def _get_module_functions(module) -> dict:
     return functions
 
 
-def _collect_dependencies(func, module, collected: set = None) -> list:
+def _collect_dependencies(func, module, collected: set | None = None) -> list:
     """Recursively collect all helper functions that a function depends on.
 
     Returns list of (name, source_code) tuples in dependency order.
@@ -91,7 +92,9 @@ def _collect_dependencies(func, module, collected: set = None) -> list:
 
 @tool
 def inspect_tool_code(
-    tool_name: Annotated[str, Field(description="Name of the tool to inspect (e.g., 'search_panglao', 'preprocess_spatial_data')")],
+    tool_name: Annotated[
+        str, Field(description="Name of the tool to inspect (e.g., 'search_panglao', 'preprocess_spatial_data')")
+    ],
 ) -> str:
     """Retrieve the source code of a predefined tool and its helper functions.
 
@@ -114,7 +117,7 @@ def inspect_tool_code(
     This is more flexible than tool calling but requires understanding the code.
     """
     # Import all tool modules
-    from . import databases, analytics, interpretation
+    from . import analytics, databases, interpretation
 
     # Map of tool names to their standalone functions and modules
     tool_map = {
@@ -128,7 +131,6 @@ def inspect_tool_code(
         "query_celltype_genesets": (databases.query_celltype_genesets, databases),
         "validate_genes_expression": (databases.validate_genes_expression, databases),
         "query_disease_genes": (databases.query_disease_genes, databases),
-
         # Analytics Tools - Core (8)
         "preprocess_spatial_data": (analytics.preprocess_spatial_data, analytics),
         "harmony_transfer_labels": (analytics.harmony_transfer_labels, analytics),
@@ -138,28 +140,24 @@ def inspect_tool_code(
         "summarize_conditions": (analytics.summarize_conditions, analytics),
         "summarize_celltypes": (analytics.summarize_celltypes, analytics),
         "summarize_tissue_regions": (analytics.summarize_tissue_regions, analytics),
-
         # Analytics Tools - Tangram (5)
         "tangram_preprocess": (analytics.tangram_preprocess, analytics),
         "tangram_map_cells": (analytics.tangram_map_cells, analytics),
         "tangram_project_annotations": (analytics.tangram_project_annotations, analytics),
         "tangram_project_genes": (analytics.tangram_project_genes, analytics),
         "tangram_evaluate": (analytics.tangram_evaluate, analytics),
-
         # Analytics Tools - CellPhoneDB (5)
         "cellphonedb_prepare": (analytics.cellphonedb_prepare, analytics),
         "cellphonedb_analysis": (analytics.cellphonedb_analysis, analytics),
         "cellphonedb_degs_analysis": (analytics.cellphonedb_degs_analysis, analytics),
         "cellphonedb_filter": (analytics.cellphonedb_filter, analytics),
         "cellphonedb_plot": (analytics.cellphonedb_plot, analytics),
-
         # Analytics Tools - LIANA (5)
         "liana_tensor": (analytics.liana_tensor, analytics),
         "liana_inference": (analytics.liana_inference, analytics),
         "liana_spatial": (analytics.liana_spatial, analytics),
         "liana_misty": (analytics.liana_misty, analytics),
         "liana_plot": (analytics.liana_plot, analytics),
-
         # Analytics Tools - Squidpy (8)
         "squidpy_spatial_neighbors": (analytics.squidpy_spatial_neighbors, analytics),
         "squidpy_nhood_enrichment": (analytics.squidpy_nhood_enrichment, analytics),
@@ -169,32 +167,27 @@ def inspect_tool_code(
         "squidpy_centrality": (analytics.squidpy_centrality, analytics),
         "squidpy_interaction_matrix": (analytics.squidpy_interaction_matrix, analytics),
         "squidpy_ligrec": (analytics.squidpy_ligrec, analytics),
-
         # Analytics Tools - Deconvolution (4)
         "destvi_deconvolution": (analytics.destvi_deconvolution, analytics),
         "cell2location_mapping": (analytics.cell2location_mapping, analytics),
         "stereoscope_deconvolution": (analytics.stereoscope_deconvolution, analytics),
         "gimvi_imputation": (analytics.gimvi_imputation, analytics),
-
         # Analytics Tools - Spatial Clustering (3)
         "spagcn_clustering": (analytics.spagcn_clustering, analytics),
         "graphst_clustering": (analytics.graphst_clustering, analytics),
         "scanpy_score_genes": (analytics.scanpy_score_genes, analytics),
-
         # Analytics Tools - Integration (5)
         "scanpy_ingest": (analytics.scanpy_ingest, analytics),
         "scanpy_bbknn": (analytics.scanpy_bbknn, analytics),
         "totalvi_integration": (analytics.totalvi_integration, analytics),
         "multivi_integration": (analytics.multivi_integration, analytics),
         "mofa_integration": (analytics.mofa_integration, analytics),
-
         # Analytics Tools - Trajectory (6)
         "scvelo_velocity": (analytics.scvelo_velocity, analytics),
         "scvelo_velocity_embedding": (analytics.scvelo_velocity_embedding, analytics),
         "cellrank_terminal_states": (analytics.cellrank_terminal_states, analytics),
         "cellrank_fate_probabilities": (analytics.cellrank_fate_probabilities, analytics),
         "paga_trajectory": (analytics.paga_trajectory, analytics),
-
         # Interpretation Tools (3)
         "annotate_cell_types": (interpretation.annotate_cell_types, interpretation),
         "annotate_tissue_niches": (interpretation.annotate_tissue_niches, interpretation),
@@ -213,7 +206,7 @@ def inspect_tool_code(
     original_name, (tool_obj, module) = normalized_map[tool_name_normalized]
 
     # For LangChain @tool decorated functions, get the underlying function via .func
-    if hasattr(tool_obj, 'func'):
+    if hasattr(tool_obj, "func"):
         tool_func = tool_obj.func
     else:
         tool_func = tool_obj

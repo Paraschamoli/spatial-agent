@@ -3,6 +3,7 @@ Simplified LLM Factory for Azure OpenAI, OpenAI, Anthropic Claude, Google Gemini
 """
 
 import os
+
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
@@ -19,8 +20,8 @@ NO_STOP_MODELS = ("gpt-5", "gpt5")
 
 # Bedrock model prefixes (Claude via AWS)
 BEDROCK_MODEL_PREFIXES = (
-    "anthropic.claude-",      # Standard Bedrock Claude
-    "us.anthropic.claude-",   # Cross-region inference
+    "anthropic.claude-",  # Standard Bedrock Claude
+    "us.anthropic.claude-",  # Cross-region inference
     "amazon.titan-",
     "meta.llama-",
     "mistral.",
@@ -31,6 +32,7 @@ BEDROCK_MODEL_PREFIXES = (
 
 class BedrockConfig:
     """AWS Bedrock configuration using SSO profile."""
+
     PROFILE_NAME = os.environ.get("AWS_PROFILE", "spatialagent")
     REGION = os.environ.get("AWS_REGION", "us-west-2")
 
@@ -156,10 +158,7 @@ class CostCallback(BaseCallbackHandler):
         self.num_calls += 1
 
         # Calculate cost (rates are per 1M tokens)
-        cost = (
-            input_tokens * self.rates["input"] / 1_000_000 +
-            output_tokens * self.rates["output"] / 1_000_000
-        )
+        cost = input_tokens * self.rates["input"] / 1_000_000 + output_tokens * self.rates["output"] / 1_000_000
         self.total_cost += cost
 
     def print_summary(self) -> None:
@@ -179,7 +178,7 @@ def make_llm(
     streaming: bool = False,
     track_cost: bool = True,
     use_azure: bool = None,
-    **kwargs
+    **kwargs,
 ):
     """
     Create LLM instance. Supports OpenAI, Azure OpenAI, Anthropic, Bedrock, and Google Gemini.
@@ -240,19 +239,18 @@ def make_llm(
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             callbacks=callbacks,
             stop=stop_sequences,
-            **kwargs
+            **kwargs,
         )
 
     # AWS Bedrock models
     if _is_bedrock_model(model):
         try:
-            from langchain_aws import ChatBedrockConverse
             import boto3
             from botocore.config import Config
+            from langchain_aws import ChatBedrockConverse
         except ImportError:
             raise ImportError(
-                "langchain_aws and boto3 packages required. "
-                "Install with: pip install langchain-aws boto3"
+                "langchain_aws and boto3 packages required. Install with: pip install langchain-aws boto3"
             )
 
         # Get region from kwargs or use defaults
@@ -264,7 +262,7 @@ def make_llm(
         bedrock_config = Config(
             read_timeout=300,  # 5 minutes for long responses
             connect_timeout=60,
-            retries={"max_attempts": 3}
+            retries={"max_attempts": 3},
         )
         bedrock_client = boto3.client(
             "bedrock-runtime",
@@ -283,7 +281,7 @@ def make_llm(
             max_tokens=kwargs.pop("max_tokens", 8192),
             stop_sequences=stop_sequences,
             callbacks=callbacks,
-            **kwargs
+            **kwargs,
         )
 
     # Anthropic Claude (direct API)
@@ -306,7 +304,7 @@ def make_llm(
             streaming=streaming,
             callbacks=callbacks,
             stop_sequences=stop_sequences,
-            **kwargs
+            **kwargs,
         )
 
     # Azure OpenAI (configured via environment variables)
@@ -322,7 +320,9 @@ def make_llm(
         stop_sequences = kwargs.pop("stop_sequences", DEFAULT_STOP_SEQUENCES)
 
         # GPT-5 models only support temperature=1 (default) and don't support max_tokens or stop
-        if any(x in model.lower() for x in NO_STOP_MODELS) or any(x in azure_deployment.lower() for x in NO_STOP_MODELS):
+        if any(x in model.lower() for x in NO_STOP_MODELS) or any(
+            x in azure_deployment.lower() for x in NO_STOP_MODELS
+        ):
             return AzureChatOpenAI(
                 api_key=azure_api_key,
                 azure_endpoint=azure_endpoint,
@@ -333,7 +333,7 @@ def make_llm(
                 temperature=1,  # GPT-5 only supports default value
                 max_tokens=None,  # GPT-5 doesn't support this parameter
                 # Note: GPT-5 doesn't support 'stop' parameter
-                **kwargs
+                **kwargs,
             )
         else:
             return AzureChatOpenAI(
@@ -345,7 +345,7 @@ def make_llm(
                 callbacks=callbacks,
                 temperature=temperature,
                 stop=stop_sequences,
-                **kwargs
+                **kwargs,
             )
 
     # OpenAI vs Azure routing for GPT/O-series models
@@ -372,7 +372,7 @@ def make_llm(
                 "openai_api_version": AZURE_API_VERSION,
                 "streaming": streaming,
                 "callbacks": callbacks,
-                **kwargs
+                **kwargs,
             }
 
             if config.get("supports_stop", True):
@@ -386,12 +386,7 @@ def make_llm(
             # Direct OpenAI
             from langchain_openai import ChatOpenAI
 
-            model_kwargs = {
-                "model": model,
-                "streaming": streaming,
-                "callbacks": callbacks,
-                **kwargs
-            }
+            model_kwargs = {"model": model, "streaming": streaming, "callbacks": callbacks, **kwargs}
 
             # Some models don't support 'stop' parameter
             if not any(x in model.lower() for x in NO_STOP_MODELS):
@@ -416,10 +411,7 @@ def make_llm(
 
     supported_models = openai_azure_models + claude_models + gemini_models + bedrock_models
 
-    raise ValueError(
-        f"Model '{model}' not supported. "
-        f"Supported models: {', '.join(sorted(supported_models))}"
-    )
+    raise ValueError(f"Model '{model}' not supported. Supported models: {', '.join(sorted(supported_models))}")
 
 
 # Local embedding models (sentence-transformers)
@@ -473,13 +465,11 @@ class LocalEmbeddings:
 
         try:
             from sentence_transformers import SentenceTransformer
+
             self.model = SentenceTransformer(model_path)
             self.model_name = model_path
         except ImportError:
-            raise ImportError(
-                "sentence-transformers not installed. "
-                "Install with: pip install sentence-transformers"
-            )
+            raise ImportError("sentence-transformers not installed. Install with: pip install sentence-transformers")
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         """Embed a list of documents."""

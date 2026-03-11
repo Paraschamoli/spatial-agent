@@ -1,21 +1,27 @@
 """Spatial Transcriptomics Agent using LangGraph."""
 
-from typing import Annotated, List, Dict, Any, TypedDict, Literal
-import os, re, operator, warnings, uuid, logging, signal
-warnings.filterwarnings('ignore')
+import logging
+import os
+import re
+import signal
+import uuid
+import warnings
+from typing import Any, TypedDict
 
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
-from langgraph.graph import StateGraph, END, START
+warnings.filterwarnings("ignore")
+
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
 
 from .make_prompt import AgentPrompts
-from .tool_system import ToolRegistry, EmbedToolRetriever, ToolExecutor, LLMToolSelector
 from .skills import SkillManager
-
+from .tool_system import EmbedToolRetriever, LLMToolSelector, ToolExecutor, ToolRegistry
 
 
 class AgentState(TypedDict):
     """State of the agent graph."""
+
     messages: list[BaseMessage]
     next_step: str | None
 
@@ -26,7 +32,7 @@ class SpatialAgent:
     def __init__(
         self,
         llm=None,
-        tools: List = None,
+        tools: list = None,
         data_path: str = "./data",
         save_path: str = "./experiments",
         tool_retrieval: bool = True,
@@ -64,7 +70,8 @@ class SpatialAgent:
         """
         # Default to Claude Sonnet 4.5 if no LLM provided
         if llm is None:
-            from .make_llm import make_llm, DEFAULT_CLAUDE_MODEL
+            from .make_llm import DEFAULT_CLAUDE_MODEL, make_llm
+
             print(f"No LLM provided, using default: {DEFAULT_CLAUDE_MODEL}", flush=True)
             llm = make_llm(DEFAULT_CLAUDE_MODEL)
         self.llm = llm
@@ -76,11 +83,12 @@ class SpatialAgent:
 
         # Set the model config for subagents and tool selectors to use
         from . import set_agent_model
+
         # Extract model name from LLM if possible
         # Check multiple attributes for different LLM types
         # Priority: deployment_name (Azure) > model_id (Bedrock) > model_name > model (ensure it's a string)
         model_name = None
-        for attr in ['deployment_name', 'model_id', 'model_name', 'model']:
+        for attr in ["deployment_name", "model_id", "model_name", "model"]:
             val = getattr(llm, attr, None)
             if val and isinstance(val, str):
                 model_name = val
@@ -117,6 +125,7 @@ class SpatialAgent:
         if tools is None:
             print("Auto-loading tools from tool modules...", flush=True)
             from .utils import load_all_tools
+
             tools = load_all_tools(save_path=save_path, data_path=data_path)
             print(f"Loaded {len(tools)} tools", flush=True)
 
@@ -149,6 +158,7 @@ class SpatialAgent:
 
             For web_search, automatically injects the configured web_search_model.
             """
+
             def wrapper(*args, **kwargs):
                 # Build input dict based on calling convention
                 if len(args) == 1 and isinstance(args[0], dict) and not kwargs:
@@ -156,13 +166,21 @@ class SpatialAgent:
                 elif kwargs and not args:
                     input_dict = kwargs.copy()
                 elif args and not kwargs:
-                    param_names = list(langchain_tool.args_schema.model_fields.keys()) if hasattr(langchain_tool, 'args_schema') else []
+                    param_names = (
+                        list(langchain_tool.args_schema.model_fields.keys())
+                        if hasattr(langchain_tool, "args_schema")
+                        else []
+                    )
                     if len(args) <= len(param_names):
                         input_dict = {param_names[i]: args[i] for i in range(len(args))}
                     else:
                         return langchain_tool.invoke(args[0])
                 else:
-                    param_names = list(langchain_tool.args_schema.model_fields.keys()) if hasattr(langchain_tool, 'args_schema') else []
+                    param_names = (
+                        list(langchain_tool.args_schema.model_fields.keys())
+                        if hasattr(langchain_tool, "args_schema")
+                        else []
+                    )
                     input_dict = {}
                     for i, arg in enumerate(args):
                         if i < len(param_names):
@@ -196,18 +214,10 @@ class SpatialAgent:
         if self.tool_retrieval:
             if tool_retrieval_method == "llm":
                 print(f"Initializing LLM-based tool retrieval ({model_name})...", flush=True)
-                self.tool_selector = LLMToolSelector(
-                    self.tool_registry,
-                    min_tools=min_tools,
-                    max_tools=max_tools
-                )
+                self.tool_selector = LLMToolSelector(self.tool_registry, min_tools=min_tools, max_tools=max_tools)
             elif tool_retrieval_method == "embedding":
-                print(f"Initializing embedding-based tool retrieval...", flush=True)
-                self.tool_retriever = EmbedToolRetriever(
-                    self.tool_registry,
-                    min_tools=min_tools,
-                    max_tools=max_tools
-                )
+                print("Initializing embedding-based tool retrieval...", flush=True)
+                self.tool_retriever = EmbedToolRetriever(self.tool_registry, min_tools=min_tools, max_tools=max_tools)
             elif tool_retrieval_method == "all":
                 print(f"Using all {len(self.tool_registry.tools)} tools (no retrieval)...", flush=True)
             else:
@@ -223,7 +233,7 @@ class SpatialAgent:
         self.num_skills = num_skills
         if self.skill_retrieval:
             # Skills directory is fixed relative to this file: spatial_agent/skills/
-            skills_dir = os.path.join(os.path.dirname(__file__), '..', 'skills')
+            skills_dir = os.path.join(os.path.dirname(__file__), "..", "skills")
             self.skill_manager = SkillManager(skills_dir)
             self.skill_manager.set_llm(llm)
             skills = self.skill_manager.load_skills()
@@ -235,8 +245,9 @@ class SpatialAgent:
 
         # Extract cost callback for summary printing
         self.cost_callback = None
-        if hasattr(llm, 'callbacks'):
+        if hasattr(llm, "callbacks"):
             from .make_llm import CostCallback
+
             for cb in llm.callbacks:
                 if isinstance(cb, CostCallback):
                     self.cost_callback = cb
@@ -268,9 +279,7 @@ The system will retrieve relevant tools based on your task.
 """
         else:
             # List all tools if not using retrieval
-            tool_descriptions = [
-                "**Available tools:**\n"
-            ]
+            tool_descriptions = ["**Available tools:**\n"]
             for tool_name in self.tool_registry.list_tools():
                 tool = self.tool_registry.get_tool(tool_name)
                 tool_descriptions.append(f"- {tool_name}: {tool.description}")
@@ -278,7 +287,6 @@ The system will retrieve relevant tools based on your task.
 
         # Use existing SYSTEM_PROMPT template but with dynamic tool info
         return AgentPrompts.SYSTEM_PROMPT(tool_info, save_path=self.save_path)
-
 
     def _build_graph(self) -> StateGraph:
         """Build the simplified LangGraph state machine."""
@@ -298,7 +306,7 @@ The system will retrieve relevant tools based on your task.
                 "act": "act",
                 "plan": "plan",
                 "end": END,
-            }
+            },
         )
         workflow.add_edge("act", "plan")
 
@@ -320,7 +328,7 @@ The system will retrieve relevant tools based on your task.
                 lines.extend(params)
         return "\n".join(lines)
 
-    def _plan_node(self, state: AgentState) -> Dict[str, Any]:
+    def _plan_node(self, state: AgentState) -> dict[str, Any]:
         """Plan node: LLM thinks and decides what to do next."""
         # Count human messages to detect new queries
         human_msg_count = sum(1 for m in state["messages"] if isinstance(m, HumanMessage))
@@ -361,11 +369,17 @@ The system will retrieve relevant tools based on your task.
                         skill_tools = list(dict.fromkeys(skill_tools))
                         self._selected_skill = skill_contents
 
-                        print(f"\033[1m<skill>\033[0m retrieved {', '.join(skill_names)} \033[1m</skill>\033[0m\n", flush=True)
+                        print(
+                            f"\033[1m<skill>\033[0m retrieved {', '.join(skill_names)} \033[1m</skill>\033[0m\n",
+                            flush=True,
+                        )
                         if skill_tools:
-                            print(f"\033[1m<skill-tools>\033[0m {'; '.join(skill_tools)} \033[1m</skill-tools>\033[0m\n", flush=True)
+                            print(
+                                f"\033[1m<skill-tools>\033[0m {'; '.join(skill_tools)} \033[1m</skill-tools>\033[0m\n",
+                                flush=True,
+                            )
                     else:
-                        print(f"\033[1m<skill>\033[0m no workflow needed \033[1m</skill>\033[0m\n", flush=True)
+                        print("\033[1m<skill>\033[0m no workflow needed \033[1m</skill>\033[0m\n", flush=True)
                         self._selected_skill = []
 
                 # Step 2: Select additional tools based on method
@@ -460,8 +474,7 @@ The system will retrieve relevant tools based on your task.
             print("parsing error...", flush=True)
             # Check if we already added an error message to avoid infinite loops
             error_count = sum(
-                1 for m in state["messages"]
-                if isinstance(m, AIMessage) and "There are no tags" in m.content
+                1 for m in state["messages"] if isinstance(m, AIMessage) and "There are no tags" in m.content
             )
 
             if error_count >= 2:
@@ -513,8 +526,8 @@ The system will retrieve relevant tools based on your task.
 
         # Append to file (JSONL format for streaming writes)
         try:
-            with open(self._observation_log_path, 'a') as f:
-                f.write(json.dumps(entry) + '\n')
+            with open(self._observation_log_path, "a") as f:
+                f.write(json.dumps(entry) + "\n")
         except Exception as e:
             print(f"Warning: Could not write to observation log: {e}")
 
@@ -532,30 +545,34 @@ The system will retrieve relevant tools based on your task.
 
         try:
             from spatial_agent.tools.coding import get_new_image_files
+
             image_files = get_new_image_files()
             if not image_files:
                 return ""
 
             # Check if we're in a Jupyter environment
             try:
-                from IPython.display import display, Image, SVG
                 import os
+
+                from IPython.display import SVG, Image, display
+
                 print(f"📊 Displaying {len(image_files)} figure(s)...")
                 for img_path in image_files:
                     if not os.path.exists(img_path):
                         print(f"⚠️ File not found: {img_path}")
                         continue
                     ext = os.path.splitext(img_path)[1].lower()
-                    if ext == '.svg':
+                    if ext == ".svg":
                         display(SVG(filename=img_path))
-                    elif ext in ('.png', '.jpg', '.jpeg'):
+                    elif ext in (".png", ".jpg", ".jpeg"):
                         display(Image(filename=img_path))
-                    elif ext == '.pdf':
+                    elif ext == ".pdf":
                         # For PDFs, just note the file was created
                         print(f"📄 Created: {os.path.basename(img_path)}")
             except ImportError:
                 # Not in Jupyter, just note that figures were generated
                 import os
+
                 print(f"[{len(image_files)} figure(s) created: {', '.join(os.path.basename(f) for f in image_files)}]")
 
             # Auto-interpret figures if enabled
@@ -566,12 +583,13 @@ The system will retrieve relevant tools based on your task.
 
                 for img_path in image_files:
                     import os
+
                     if not os.path.exists(img_path):
                         continue
 
                     ext = os.path.splitext(img_path)[1].lower()
                     # Skip PDFs for now (vision models handle images better)
-                    if ext == '.pdf':
+                    if ext == ".pdf":
                         continue
 
                     try:
@@ -583,7 +601,7 @@ The system will retrieve relevant tools based on your task.
                         interpretation = interpret_figure.invoke({
                             "image_path": img_path,
                             "context": context,
-                            "analysis_focus": "general"
+                            "analysis_focus": "general",
                         })
 
                         fig_name = os.path.basename(img_path)
@@ -680,8 +698,8 @@ The system will retrieve relevant tools based on your task.
 
         # === 4. Extract gene names if present ===
         gene_patterns = [
-            r'var_names\s*=\s*\[([^\]]+)\]',
-            r'genes\s*=\s*\[([^\]]+)\]',
+            r"var_names\s*=\s*\[([^\]]+)\]",
+            r"genes\s*=\s*\[([^\]]+)\]",
             r"color\s*=\s*['\"]([A-Z][A-Z0-9]+)['\"]",  # Single gene coloring
         ]
         for pattern in gene_patterns:
@@ -693,7 +711,7 @@ The system will retrieve relevant tools based on your task.
                 break
 
         # === 5. Extract comments that might describe the plot ===
-        comment_pattern = r'#\s*(.+?)$'
+        comment_pattern = r"#\s*(.+?)$"
         comments = re.findall(comment_pattern, code, re.MULTILINE)
         relevant_comments = [c.strip() for c in comments if len(c.strip()) > 10 and len(c.strip()) < 100]
         if relevant_comments:
@@ -720,7 +738,7 @@ The system will retrieve relevant tools based on your task.
 
         return " | ".join(context_parts)
 
-    def _act_node(self, state: AgentState) -> Dict[str, Any]:
+    def _act_node(self, state: AgentState) -> dict[str, Any]:
         """Act node: runs code from <act> tags using tool-based execution with timeout."""
         last_message = state["messages"][-1].content
         act_match = re.search(r"<act>(.*?)</act>", last_message, re.DOTALL)
@@ -770,7 +788,7 @@ The system will retrieve relevant tools based on your task.
                 signal.signal(signal.SIGALRM, old_handler)
 
         except TimeoutError as e:
-            result = f"ERROR: {str(e)}\n\nThe code execution was terminated. Consider:\n- Breaking the task into smaller steps\n- Using more efficient algorithms\n- Processing data in chunks"
+            result = f"ERROR: {e!s}\n\nThe code execution was terminated. Consider:\n- Breaking the task into smaller steps\n- Using more efficient algorithms\n- Processing data in chunks"
 
         # Truncate if too long
         if len(result) > 15000:
@@ -785,10 +803,7 @@ The system will retrieve relevant tools based on your task.
         # Log observation for deep research report
         step_number = len([m for m in state["messages"] if isinstance(m, AIMessage) and "<act>" in str(m.content)])
         self._log_observation(
-            step_number=step_number,
-            code=code,
-            result=result,
-            figure_interpretations=figure_interpretations
+            step_number=step_number, code=code, result=result, figure_interpretations=figure_interpretations
         )
 
         state["messages"].append(AIMessage(content=observation))
@@ -856,7 +871,7 @@ The system will retrieve relevant tools based on your task.
 
                 # Display everything before conclude with formatted tags
                 if conclude_match.start() > 0:
-                    pre_conclude = msg[:conclude_match.start()].strip()
+                    pre_conclude = msg[: conclude_match.start()].strip()
                     pre_conclude = format_tag(pre_conclude, "act", "\033[91m")
                     pre_conclude = format_tag(pre_conclude, "observation", "\033[94m")
                     print(pre_conclude)
@@ -887,7 +902,7 @@ The system will retrieve relevant tools based on your task.
             print()
             sys.stdout.flush()
 
-    def run(self, user_query: str, config: Dict[str, Any] = None) -> Dict[str, Any]:
+    def run(self, user_query: str, config: dict[str, Any] = None) -> dict[str, Any]:
         """
         Run the agent with a user query.
 
@@ -917,13 +932,12 @@ The system will retrieve relevant tools based on your task.
         # Use unique thread_id for each run to ensure isolated state
         langgraph_config = {
             "recursion_limit": config.get("recursion_limit", 50),
-            "configurable": {
-                "thread_id": config.get("thread_id", str(uuid.uuid4()))
-            }
+            "configurable": {"thread_id": config.get("thread_id", str(uuid.uuid4()))},
         }
 
         # Display query header
         import sys
+
         print(f"\033[1m<user query>\033[0m\n{user_query.strip()}\n\033[1m</user query>\033[0m\n")
         sys.stdout.flush()
 
@@ -972,7 +986,7 @@ The system will retrieve relevant tools based on your task.
                     if not conclude_reached:
                         self._print_message(messages[i])
                         # Check if this message contains conclude
-                        msg_content = messages[i].content if hasattr(messages[i], 'content') else ""
+                        msg_content = messages[i].content if hasattr(messages[i], "content") else ""
                         if isinstance(msg_content, str) and "<conclude>" in msg_content:
                             conclude_reached = True
 
