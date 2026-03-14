@@ -5,16 +5,16 @@ author: paras@getbindu.com
 
 # Description
 description: |
-  Comprehensive spatial transcriptomics analysis skill for cell type annotation,
-  cell-cell communication analysis, and spatial domain detection.
+  Multi-agent system that generates spatial transcriptomics analysis plans.
+  Coordinates three specialized LLM agents to provide guidance on cell type annotation,
+  cell-cell communication analysis, and spatial domain detection strategies.
 
 # Tags and Modes
 tags:
   - spatial-transcriptomics
+  - analysis-planning
   - bioinformatics
-  - cell-type-annotation
-  - spatial-analysis
-  - genomics
+  - multi-agent
 
 input_modes:
   - text/plain
@@ -26,52 +26,42 @@ output_modes:
 
 # Example Queries
 examples:
-  - "Annotate cell types in my spatial transcriptomics data from mouse brain"
-  - "Perform cell-cell communication analysis on my tumor microenvironment data"
-  - "Design a 50-gene panel for spatial analysis of human liver tissue"
-  - "Identify spatial domains in my breast cancer dataset"
+  - "I have a spatial transcriptomics dataset from human breast cancer tissue. Provide an analysis plan for cell type annotation and communication analysis."
+  - "Create a workflow for analyzing 10x Visium data with 5,000 spots to identify spatial domains and cell-cell interactions."
+  - "Recommend tools and methods for spatial transcriptomics analysis of tumor microenvironment."
 
 # Detailed Capabilities
 capabilities_detail:
   primary_capability:
     supported: true
-    description: "Spatial transcriptomics data analysis with automated workflows"
+    description: "Generates analysis plans using three specialized LLM agents"
     features:
-      - "Cell type annotation using reference datasets"
-      - "Cell-cell communication analysis"
-      - "Spatial domain detection"
-      - "Gene panel design"
-      - "Literature and database integration"
-    limitations: "Requires spatial coordinates and gene expression data"
+      - "Annotation Specialist: Recommends cell type annotation strategies"
+      - "Communication Analyst: Suggests cell-cell communication analysis methods"
+      - "Spatial Domain Expert: Provides spatial domain detection guidance"
+      - "Multidisciplinary synthesis: Integrates specialist recommendations into cohesive workflow"
+    limitations: "Provides guidance only, does not execute analysis or process actual data files"
 
   secondary_capability:
-    supported: true
-    description: "Multi-omics integration and trajectory analysis"
-    features:
-      - "RNA velocity analysis"
-      - "Multimodal data integration"
-      - "Trajectory inference"
-      - "Spatial mapping of scRNA-seq data"
+    supported: false
+    description: "Data processing and execution capabilities not implemented"
 
 # Requirements
 requirements:
   packages:
-    - "scanpy>=1.10"
-    - "anndata>=0.11"
-    - "pandas>=2.2"
-    - "numpy>=2.0"
-    - "matplotlib>=3.9"
-    - "biopython>=1.84"
-    - "gget>=0.28.0"
+    - "langchain-core"
+    - "langchain-openai"
+    - "pydantic"
+    - "bindu"
   system:
     - "Python 3.11+"
-  min_memory_mb: 1024
+  min_memory_mb: 256
 
 # Performance Metrics
 performance:
-  avg_processing_time_ms: 5000
+  avg_processing_time_ms: 20000
   max_concurrent_requests: 5
-  memory_per_request_mb: 1024
+  memory_per_request_mb: 256
   scalability: horizontal
 
 # Tool Restrictions
@@ -83,159 +73,203 @@ allowed_tools:
 # Rich Documentation
 documentation:
   overview: |
-    TODO: Provide a comprehensive overview of your skill.
-    Describe what it does, how it works, and what makes it useful.
-    Include information about the underlying technologies or approaches used.
+    Multi-agent team that coordinates spatial transcriptomics analysis planning.
+    Uses three specialized LLM agents running concurrently: Annotation Specialist,
+    Communication Analyst, and Spatial Domain Expert. Each agent analyzes the user's
+    data description and provides domain-specific recommendations. A fourth agent
+    (MultidisciplinarySpatialTeam) synthesizes all specialist reports into a
+    comprehensive, integrated analysis plan. Built on LangChain with OpenRouter models.
 
   use_cases:
     when_to_use:
-      - "TODO: Scenario 1 when this skill should be used"
-      - "TODO: Scenario 2 when this skill should be used"
-      - "TODO: Scenario 3 when this skill should be used"
+      - "Planning spatial transcriptomics analysis workflows"
+      - "Getting recommendations for tools and methods"
+      - "Understanding best practices for cell type annotation, communication analysis, or spatial domain detection"
+      - "Designing analysis strategies for 10x Visium or similar spatial data"
 
     when_not_to_use:
-      - "TODO: Scenario when this skill should NOT be used"
-      - "TODO: Alternative skill or approach for those scenarios"
-      - "TODO: Limitations or constraints"
+      - "Actual data processing or file manipulation"
+      - "Running computational analysis pipelines"
+      - "Real-time data visualization"
+      - "Non-spatial transcriptomics analysis"
 
   input_structure: |
-    TODO: Describe the expected input format for your skill.
+    JSON-RPC 2.0 message with user query describing spatial transcriptomics dataset.
 
     Example:
     {
-      "parameter1": "value1",
-      "parameter2": "value2",
-      "options": {
-        "option1": true,
-        "option2": "value"
-      }
+      "jsonrpc": "2.0",
+      "method": "message/send",
+      "params": {
+        "message": {
+          "role": "user",
+          "parts": [
+            {
+              "kind": "text",
+              "text": "I have a spatial transcriptomics dataset from human breast cancer tissue analyzed with 10x Visium. The dataset contains approximately 5,000 spots. I need to identify cell types, analyze cell-cell communication, and detect spatial domains."
+            }
+          ],
+          "kind": "message",
+          "messageId": "9e83c510-5616-49ad-b187-d93cbb800001",
+          "contextId": "9e83c510-5616-49ad-b187-d93cbb800002",
+          "taskId": "9e83c510-5616-49ad-b187-d93cbb800003"
+        },
+        "skillId": "spatial-v1",
+        "configuration": {
+          "acceptedOutputModes": ["application/json"]
+        }
+      },
+      "id": "9e83c510-5616-49ad-b187-d93cbb800003"
     }
 
-    Constraints:
-    - TODO: List input constraints
-    - TODO: Validation rules
-    - TODO: Supported formats
-
   output_format: |
-    TODO: Describe the output format your skill produces.
+    JSON-RPC 2.0 result with task history and artifacts containing markdown analysis plan.
 
     Success Response:
     {
-      "success": true,
+      "jsonrpc": "2.0",
+      "id": "9e83c510-5616-49ad-b187-d93cbb800004",
       "result": {
-        "data": "TODO: Your result data",
-        "metadata": {
-          "processing_time_ms": 1000,
-          "additional_info": "value"
-        }
-      }
-    }
-
-    Error Response:
-    {
-      "success": false,
-      "error": {
-        "code": "ERROR_CODE",
-        "message": "Error description"
+        "id": "9e83c510-5616-49ad-b187-d93cbb800003",
+        "context_id": "9e83c510-5616-49ad-b187-d93cbb800002",
+        "kind": "task",
+        "status": {
+          "state": "completed",
+          "timestamp": "2026-03-12T03:44:07.092657+00:00"
+        },
+        "history": [
+          {
+            "kind": "message",
+            "role": "user",
+            "parts": [{"kind": "text", "text": "User query"}]
+          },
+          {
+            "kind": "message",
+            "role": "assistant",
+            "parts": [{"kind": "text", "text": "### Spatial Analysis Plan:\n\n[Integrated plan with steps for preprocessing, annotation, communication analysis, spatial domain detection, visualization, and interpretation]"}]
+          }
+        ],
+        "artifacts": [
+          {
+            "name": "result",
+            "parts": [{"kind": "text", "text": "Markdown formatted analysis plan"}]
+          }
+        ]
       }
     }
 
   error_handling:
-    - "TODO: Error type 1 and how it's handled"
-    - "TODO: Error type 2 and how it's handled"
-    - "TODO: Timeout behavior and fallback strategies"
-    - "TODO: Validation errors and user feedback"
-    - "TODO: Resource limit handling"
+    - "Missing API key: Returns error message requesting OPENROUTER_API_KEY"
+    - "LLM API failures: Prints error and returns error message"
+    - "Empty data description: Returns error requesting user input"
+    - "Agent execution errors: Caught and returned as error strings"
 
   examples:
-    - title: "TODO: Example 1 Title"
+    - title: "Breast Cancer Spatial Analysis Planning"
       input:
-        parameter1: "value1"
-        parameter2: "value2"
+        parts:
+          - kind: "text"
+            text: "I have a spatial transcriptomics dataset from human breast cancer tissue analyzed with 10x Visium. The dataset contains approximately 5,000 spots and 20,000 genes. I need to perform cell type annotation using PanglaoDB markers, analyze cell-cell communication using CellPhoneDB, and detect spatial domains."
       output:
-        success: true
-        result:
-          data: "example output"
-        metadata:
-          processing_time_ms: 500
+        text: |
+          ### Spatial Analysis Plan:
 
-    - title: "TODO: Example 2 Title"
-      input:
-        parameter1: "different_value"
-        options:
-          option1: true
-      output:
-        success: true
-        result:
-          data: "example output 2"
-        metadata:
-          processing_time_ms: 750
+          Step 1: Preprocessing and Quality Control
+          - Use Seurat or Scanpy for data quality assessment
+          - Normalize using SCTransform or log1p normalization
+          - Filter low-quality spots
+
+          Step 2: Cell Type Annotation
+          - Use PanglaoDB database for marker identification
+          - Perform clustering with Louvain or Leiden algorithm
+          - Annotate clusters based on marker expression
+
+          Step 3: Cell-Cell Communication Analysis
+          - Prepare input for CellPhoneDB
+          - Identify ligand-receptor interactions
+          - Focus on immune checkpoint pathways
+
+          Step 4: Spatial Domain Detection
+          - Use SpaGCN and UTAG for spatial clustering
+          - Identify tumor microenvironment regions
+          - Detect immune infiltration zones
+
+          Step 5: Visualization
+          - Generate spatial plots with Seurat or Scanpy
+          - Visualize interaction networks
+          - Create spatial distribution maps
+
+          Step 6: Integration and Interpretation
+          - Integrate results from all analyses
+          - Contextualize findings in breast cancer biology
 
   best_practices:
     for_developers:
-      - "TODO: Best practice 1 for implementing this skill"
-      - "TODO: Best practice 2 for error handling"
-      - "TODO: Best practice 3 for performance optimization"
-      - "TODO: Best practice 4 for testing and validation"
+      - "Use async/await for all agent operations"
+      - "Handle LLM API errors gracefully"
+      - "Validate OPENROUTER_API_KEY before initialization"
+      - "Use concurrent execution for specialist agents"
 
     for_orchestrators:
-      - "TODO: When to route requests to this skill"
-      - "TODO: How to chain this skill with others"
-      - "TODO: Performance considerations for load balancing"
-      - "TODO: Retry and fallback strategies"
-      - "TODO: Monitoring and observability recommendations"
+      - "Route spatial transcriptomics planning queries to this skill"
+      - "Expect 15-30 second processing time per request"
+      - "Chain with data processing skills for execution"
+      - "Monitor OpenRouter API usage and rate limits"
+      - "This skill provides guidance only, not data processing"
 
   installation: |
-    TODO: Provide installation instructions for your skill.
+    Install via package manager.
 
     Required packages:
-    pip install <your-package-name>
+    pip install langchain-core langchain-openai pydantic bindu
 
-    Optional dependencies:
-    # TODO: Add platform-specific installation steps if needed
-    # macOS
-    brew install <dependency>
+    Environment variables:
+    OPENROUTER_API_KEY=<your-key>
+    MODEL_NAME=gpt-4o (optional, defaults to gpt-4o)
 
-    # Ubuntu/Debian
-    apt-get install <dependency>
-
-    # Windows
-    # TODO: Windows-specific instructions
+    Run:
+    python -m spatial_agent
 
   versioning:
     - version: "1.0.0"
-      date: "TODO: Release date"
-      changes: "Initial release with core functionality"
+      date: "2026-03-12"
+      changes: "Initial release with multi-agent analysis planning"
     - version: "1.1.0"
       status: "planned"
-      changes: "TODO: Planned enhancements for next version"
+      changes: "Add data processing capabilities and file handling"
 
 # Assessment fields for skill negotiation
 assessment:
   keywords:
-    - "TODO: keyword1"
-    - "TODO: keyword2"
-    - "TODO: keyword3"
-    - "TODO: Add relevant keywords for skill matching"
+    - "spatial"
+    - "transcriptomics"
+    - "visium"
+    - "cell type"
+    - "annotation"
+    - "communication"
+    - "spatial domain"
+    - "CellPhoneDB"
+    - "PanglaoDB"
 
   specializations:
-    - domain: "TODO: domain1"
+    - domain: "spatial-transcriptomics"
       confidence_boost: 0.3
-    - domain: "TODO: domain2"
+    - domain: "bioinformatics-planning"
       confidence_boost: 0.2
 
   anti_patterns:
-    - "TODO: Pattern that should NOT match this skill"
-    - "TODO: Alternative skill name or approach"
-    - "TODO: Out of scope operations"
+    - "Actual data file processing or analysis execution"
+    - "Non-spatial transcriptomics data"
+    - "Real-time visualization generation"
+    - "Bulk RNA-seq or scRNA-seq without spatial component"
 
   complexity_indicators:
     simple:
-      - "TODO: Simple task indicator 1"
-      - "TODO: Simple task indicator 2"
+      - "Recommend tools for spatial analysis"
+      - "Explain cell type annotation methods"
     medium:
-      - "TODO: Medium complexity indicator 1"
-      - "TODO: Medium complexity indicator 2"
+      - "Create analysis plan for 10x Visium dataset"
+      - "Suggest workflow for communication analysis"
     complex:
-      - "TODO: Complex task indicator 1"
-      - "TODO: Complex task indicator 2"
+      - "Comprehensive multi-step analysis plan with tool recommendations and parameters"
+      - "Integrated workflow covering annotation, communication, and spatial domains"

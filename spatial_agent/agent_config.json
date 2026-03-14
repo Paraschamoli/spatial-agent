@@ -28,12 +28,6 @@
       "key": "OPENROUTER_API_KEY",
       "description": "OpenRouter API key for all models",
       "required": true
-    },
-    {
-      "key": "MODEL_NAME",
-      "description": "Model name to use (default: claude-sonnet-4-5-20250929)",
-      "required": false,
-      "default": "claude-sonnet-4-5-20250929"
     }
   ]
 }

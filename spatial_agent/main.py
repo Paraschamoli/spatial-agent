@@ -180,8 +180,8 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default=os.getenv("MODEL_NAME", "gpt-4o"),
-        help="Model name to use (env: MODEL_NAME, default: gpt-4o)",
+        default=os.getenv("MODEL_NAME", "claude-sonnet-4-5-20250929"),
+        help="Model name to use (env: MODEL_NAME, default: claude-sonnet-4-5-20250929)",
     )
     parser.add_argument(
         "--config",
